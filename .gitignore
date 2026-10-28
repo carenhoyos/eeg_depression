@@ -14,3 +14,8 @@ __pycache__/
 # Mantener la estructura de carpetas vacías
 !outputs/.gitkeep
 outputs_smoke/
+app/storage/
+models/release/*/bundle.pkl
+
+app/frontend/node_modules/
+app/frontend/dist/
