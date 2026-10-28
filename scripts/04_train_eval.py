@@ -9,11 +9,13 @@ from _bootstrap import get_config
 from eegdep.config import output_dir
 from eegdep.models import make_pipeline
 from eegdep.validation import (compute_metrics, bootstrap_ci, fit_with_search, holdout_split,
-                               permutation_test, run_nested_cv, summarize_oof)
+                               permutation_test, resolve_threshold, run_nested_cv, summarize_oof)
 
 cfg = get_config()
 out = output_dir(cfg)
 seed, n_jobs, val = int(cfg["project"]["seed"]), int(cfg["project"]["n_jobs"]), cfg["validation"]
+rep_cfg = cfg["report"]
+M, CIM, D = rep_cfg["metrics"], rep_cfg["ci_metrics"], int(rep_cfg["decimals"])
 with open(out / "02_feature_set.pkl", "rb") as f:
     fs = pickle.load(f)
 X = pd.read_csv(out / "03_features.csv", index_col=0)
@@ -38,8 +40,8 @@ for name, spec in cfg["models"].items():
     summ = summarize_oof(oof, val, seed)
     res = {"cv_per_repeat_mean": summ["per_repeat_mean"], "cv_per_repeat_sd": summ["per_repeat_sd"],
            "cv_pooled": summ["pooled_point"], "cv_pooled_ci95": summ["pooled_ci"], "best_params_per_fold": params_log}
-    print("CV (media por repetición):", {k: round(v, 3) for k, v in summ["per_repeat_mean"].items() if k in ("auc", "sensitivity", "specificity", "f1", "balanced_accuracy", "brier", "ece")})
-    print("CV IC95 (bootstrap por sujeto):", {k: tuple(round(x, 3) for x in v) for k, v in summ["pooled_ci"].items() if k in ("auc", "balanced_accuracy")})
+    print("CV (media por repetición):", {k: round(v, D) for k, v in summ["per_repeat_mean"].items() if k in M})
+    print("CV IC (bootstrap por sujeto):", {k: tuple(round(x, D) for x in v) for k, v in summ["pooled_ci"].items() if k in CIM})
     summ["subject_level_predictions"].assign(subject=fs.subjects[dev][summ["subject_level_predictions"].index]).to_csv(out / f"04_{name}_cv_predictions.csv", index=False)
 
     # modelo final: ajustado en TODO el dev (búsqueda interna agrupada) y evaluado UNA vez en holdout
@@ -47,12 +49,14 @@ for name, spec in cfg["models"].items():
     res["final_best_params"] = best_params
     if len(test):
         p = final.predict_proba(Xv[test])[:, 1]
-        res["holdout"] = compute_metrics(y[test], p, float(val["threshold"]), int(val["ece_bins"]))
-        res["holdout_ci95"] = bootstrap_ci(y[test], p, groups[test], float(val["threshold"]), int(val["ece_bins"]),
+        thr = resolve_threshold(val["threshold"], y[dev])
+        res["holdout_threshold"] = thr
+        res["holdout"] = compute_metrics(y[test], p, thr, int(val["ece_bins"]))
+        res["holdout_ci95"] = bootstrap_ci(y[test], p, groups[test], thr, int(val["ece_bins"]),
                                            int(val["bootstrap"]["n"]), float(val["bootstrap"]["ci"]), seed)
-        pd.DataFrame({"subject": fs.subjects[test], "y": y[test], "p": p}).to_csv(out / f"04_{name}_holdout_predictions.csv", index=False)
-        print("HOLDOUT:", {k: round(v, 3) for k, v in res["holdout"].items() if k in ("auc", "sensitivity", "specificity", "f1", "balanced_accuracy", "brier", "ece")},
-              " AUC IC95:", tuple(round(x, 3) for x in res["holdout_ci95"]["auc"]))
+        pd.DataFrame({"subject": fs.subjects[test], "y": y[test], "p": p, "thr": thr}).to_csv(out / f"04_{name}_holdout_predictions.csv", index=False)
+        print(f"HOLDOUT (umbral={thr:.{D}f}):", {k: round(v, D) for k, v in res["holdout"].items() if k in M},
+              " IC:", {k: tuple(round(x, D) for x in res["holdout_ci95"][k]) for k in CIM})
     if val["permutation_test"]["enabled"]:
         res["permutation"] = permutation_test(pipe, best_params, Xv[dev], y[dev], groups[dev], val,
                                               summ["pooled_point"]["auc"], int(val["permutation_test"]["n_permutations"]), seed, n_jobs)
@@ -62,8 +66,16 @@ for name, spec in cfg["models"].items():
     results[name] = res
 
 (out / "04_results.json").write_text(json.dumps(results, indent=2, default=str))
-print("\nResumen (AUC): CV media ± DE | holdout [IC95]")
+rows = []
 for name, r in results.items():
-    h = r.get("holdout", {}).get("auc", float("nan"))
-    hc = r.get("holdout_ci95", {}).get("auc", (float("nan"),) * 2)
-    print(f"  {name:15s} {r['cv_per_repeat_mean']['auc']:.3f} ± {r['cv_per_repeat_sd']['auc']:.3f} | {h:.3f} [{hc[0]:.3f}, {hc[1]:.3f}]")
+    for m in M:
+        rows.append({"model": name, "metric": m, "cv_mean": r["cv_per_repeat_mean"][m], "cv_sd": r["cv_per_repeat_sd"][m],
+                     "cv_ci_lo": r["cv_pooled_ci95"].get(m, (np.nan, np.nan))[0], "cv_ci_hi": r["cv_pooled_ci95"].get(m, (np.nan, np.nan))[1],
+                     "holdout": r.get("holdout", {}).get(m, np.nan),
+                     "holdout_ci_lo": r.get("holdout_ci95", {}).get(m, (np.nan, np.nan))[0],
+                     "holdout_ci_hi": r.get("holdout_ci95", {}).get(m, (np.nan, np.nan))[1],
+                     "permutation_p": r.get("permutation", {}).get("p_value", np.nan)})
+table = pd.DataFrame(rows).round(D)
+table.to_csv(out / "04_metrics_table.csv", index=False)
+print("\nTabla de métricas (CV media ± DE [IC bootstrap] | holdout [IC bootstrap]):")
+print(table.to_string(index=False))

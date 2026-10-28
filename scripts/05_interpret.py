@@ -13,7 +13,7 @@ from eegdep.interpret import (band_channel_matrix, cohen_d, model_feature_import
 cfg = get_config()
 out = output_dir(cfg)
 fig_dir = output_dir(cfg, "figures")
-icfg, seed, n_jobs = cfg["interpretability"], int(cfg["project"]["seed"]), int(cfg["project"]["n_jobs"])
+icfg, pcfg, seed, n_jobs = cfg["interpretability"], cfg["plotting"], int(cfg["project"]["seed"]), int(cfg["project"]["n_jobs"])
 with open(out / "02_feature_set.pkl", "rb") as f:
     fs = pickle.load(f)
 X = pd.read_csv(out / "03_features.csv", index_col=0)
@@ -31,7 +31,7 @@ vals = band_channel_matrix(uni, meta, kind, icfg["topomap_bands"], fs.channels)
 if vals:
     topomap_grid(vals, fs.channels, cfg["channels"]["montage"], fig_dir / f"topomap_univariate_{icfg['univariate_metric']}.png",
                  f"Efecto univariado ({icfg['univariate_metric']}) de potencia relativa, depresión vs control (solo desarrollo)",
-                 diverging=True, center=center, cbar_label=icfg["univariate_metric"])
+                 pcfg, diverging=True, center=center, cbar_label=icfg["univariate_metric"])
 
 # 2) Importancia por modelo + importancia por permutación en holdout + calibración
 summary = {}
@@ -42,20 +42,20 @@ for name in cfg["models"]:
     imp = model_feature_importance(model, feats)
     if imp is not None:
         imp.to_csv(out / f"05_{name}_native_importance.csv")
-        plot_top_features(imp, int(icfg["top_k_features"]), fig_dir / f"importance_{name}.png", f"{name}: importancia nativa", "coeficiente / importancia")
+        plot_top_features(imp, int(icfg["top_k_features"]), fig_dir / f"importance_{name}.png", f"{name}: importancia nativa", "coeficiente / importancia", pcfg)
         v = band_channel_matrix(imp.abs(), meta, kind, icfg["topomap_bands"], fs.channels)
         if v:
             topomap_grid(v, fs.channels, cfg["channels"]["montage"], fig_dir / f"topomap_importance_{name}.png",
-                         f"{name}: |importancia| por canal (potencia relativa)", diverging=False, cbar_label="|importancia|")
+                         f"{name}: |importancia| por canal (potencia relativa)", pcfg, diverging=False, cbar_label="|importancia|")
     if test.any():
         pi = permutation_importance_series(model, X[test].to_numpy(float), fs.y[test], feats,
                                            int(icfg["permutation_importance_repeats"]), seed, cfg["validation"]["scoring"], n_jobs)
         pi.to_csv(out / f"05_{name}_permutation_importance_holdout.csv")
         p = model.predict_proba(X[test].to_numpy(float))[:, 1]
-        plot_calibration(fs.y[test], p, int(cfg["validation"]["ece_bins"]), fig_dir / f"calibration_{name}_holdout.png", f"{name}: calibración en holdout")
+        plot_calibration(fs.y[test], p, int(cfg["validation"]["ece_bins"]), fig_dir / f"calibration_{name}_holdout.png", f"{name}: calibración en holdout", pcfg)
         summary[name] = {"top_permutation_importance_holdout": pi.head(10)["mean"].round(4).to_dict()}
     cvp = pd.read_csv(out / f"04_{name}_cv_predictions.csv")
-    plot_calibration(cvp.y.to_numpy(), cvp.p.to_numpy(), int(cfg["validation"]["ece_bins"]), fig_dir / f"calibration_{name}_cv.png", f"{name}: calibración CV (fuera de muestra)")
+    plot_calibration(cvp.y.to_numpy(), cvp.p.to_numpy(), int(cfg["validation"]["ece_bins"]), fig_dir / f"calibration_{name}_cv.png", f"{name}: calibración CV (fuera de muestra)", pcfg)
 (out / "05_interpret_summary.json").write_text(json.dumps(summary, indent=2))
 print(json.dumps(summary, indent=2))
 print("Top 15 efectos univariados (dev):")

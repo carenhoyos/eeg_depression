@@ -119,7 +119,9 @@ validation:
   inner:
     n_splits: 5
   scoring: roc_auc
-  threshold: 0.5
+  # Umbral de decisión. fixed => usa `value`; train_prevalence => prevalencia del entrenamiento
+  # de cada partición (adecuado tras calibrar con clases desbalanceadas).
+  threshold: {strategy: train_prevalence, value: 0.5}
   scaler: standard          # standard | robust | none
   feature_selection:
     method: kbest_f         # kbest_f | none
@@ -162,6 +164,20 @@ deep:
   F2: 16
   dropout: 0.5
   early_stopping_patience: 15
+
+report:
+  metrics: [auc, sensitivity, specificity, f1, balanced_accuracy, brier, ece]
+  ci_metrics: [auc, balanced_accuracy]
+  decimals: 3
+
+plotting:
+  sequential_cmap: Blues        # magnitud: un solo tono
+  diverging_cmap: RdBu_r        # polaridad: dos tonos con punto medio neutro
+  color_primary: "#2a6fdb"
+  color_negative: "#d1495b"
+  color_reference: "#9a9a9a"
+  dpi: 150
+  topomap_contours: 4
 
 interpretability:
   univariate_metric: auc              # auc | cohen_d

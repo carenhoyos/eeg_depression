@@ -33,13 +33,13 @@ eeg_depression/
 ## Uso
 
 ```bash
-python -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python scripts/01_inspect.py --config config/config.yaml
-.venv/bin/python scripts/02_standardize_qc.py
-.venv/bin/python scripts/03_features.py
-.venv/bin/python scripts/04_train_eval.py
-.venv/bin/python scripts/05_interpret.py
-# o: scripts/run_all.sh config/config.yaml
+python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+python scripts/01_inspect.py --config config/config.yaml
+python scripts/02_standardize_qc.py
+python scripts/03_features.py
+python scripts/04_train_eval.py
+python scripts/05_interpret.py
+# o: scripts/run_all.sh config/config.yaml   (PY=/otro/python para cambiar el intérprete)
 ```
 
 Para experimentar, copia el YAML (p. ej. `config/exp_coh_all.yaml`) y cambia solo lo necesario

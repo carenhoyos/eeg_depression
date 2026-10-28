@@ -44,6 +44,16 @@ def inner_cv(y: np.ndarray, groups: np.ndarray, n_splits: int, seed: int) -> lis
     return list(sgkf.split(np.zeros(len(y)), y, groups))
 
 
+def resolve_threshold(thr_cfg: dict[str, Any], y_train: np.ndarray) -> float:
+    """Umbral de decisión según configuración, calculado SOLO con etiquetas de entrenamiento."""
+    strategy = thr_cfg["strategy"]
+    if strategy == "fixed":
+        return float(thr_cfg["value"])
+    if strategy == "train_prevalence":
+        return float(np.mean(y_train))
+    raise ValueError(f"validation.threshold.strategy desconocida: {strategy}")
+
+
 # ---------------------------------------------------------------- entrenamiento
 def fit_with_search(pipeline, grid: dict, X: np.ndarray, y: np.ndarray, groups: np.ndarray,
                     val_cfg: dict[str, Any], seed: int, n_jobs: int):
@@ -72,7 +82,8 @@ def run_nested_cv(pipeline, grid: dict, X: np.ndarray, y: np.ndarray, groups: np
     for rep, k, tr, te in splits:
         model, _, bp = fit_with_search(pipeline, grid, X[tr], y[tr], groups[tr], val_cfg, seed + 100 * rep + k, n_jobs)
         p = model.predict_proba(X[te])[:, 1]
-        rows.append(pd.DataFrame({"rep": rep, "fold": k, "idx": te, "group": groups[te], "y": y[te], "p": p}))
+        thr = resolve_threshold(val_cfg["threshold"], y[tr])
+        rows.append(pd.DataFrame({"rep": rep, "fold": k, "idx": te, "group": groups[te], "y": y[te], "p": p, "thr": thr}))
         params_log.append({"rep": rep, "fold": k, **bp})
         if verbose:
             print(f"  rep {rep} fold {k}: n_train={len(tr)} n_test={len(te)} AUC_fold={roc_auc_score(y[te], p):.3f} params={bp}")
@@ -91,8 +102,9 @@ def expected_calibration_error(y: np.ndarray, p: np.ndarray, n_bins: int) -> flo
     return float(ece)
 
 
-def compute_metrics(y: np.ndarray, p: np.ndarray, threshold: float, ece_bins: int) -> dict[str, float]:
-    yhat = (p >= threshold).astype(int)
+def compute_metrics(y: np.ndarray, p: np.ndarray, threshold: float | np.ndarray, ece_bins: int) -> dict[str, float]:
+    """`threshold` puede ser escalar o un vector por observación (umbral de su partición)."""
+    yhat = (p >= np.asarray(threshold)).astype(int)
     tn, fp, fn, tp = confusion_matrix(y, yhat, labels=[0, 1]).ravel()
     return {
         "auc": float(roc_auc_score(y, p)) if len(np.unique(y)) == 2 else np.nan,
@@ -106,7 +118,7 @@ def compute_metrics(y: np.ndarray, p: np.ndarray, threshold: float, ece_bins: in
     }
 
 
-def bootstrap_ci(y: np.ndarray, p: np.ndarray, groups: np.ndarray, threshold: float, ece_bins: int,
+def bootstrap_ci(y: np.ndarray, p: np.ndarray, groups: np.ndarray, threshold: float | np.ndarray, ece_bins: int,
                  n_boot: int, ci: float, seed: int) -> dict[str, tuple[float, float]]:
     """IC por bootstrap remuestreando SUJETOS (grupos) con reemplazo."""
     rng = np.random.default_rng(seed)
@@ -118,7 +130,8 @@ def bootstrap_ci(y: np.ndarray, p: np.ndarray, groups: np.ndarray, threshold: fl
         idx = np.concatenate([by_group[g] for g in pick])
         if len(np.unique(y[idx])) < 2:
             continue
-        for k, v in compute_metrics(y[idx], p[idx], threshold, ece_bins).items():
+        thr_i = threshold if np.isscalar(threshold) else np.asarray(threshold)[idx]
+        for k, v in compute_metrics(y[idx], p[idx], thr_i, ece_bins).items():
             samples.setdefault(k, []).append(v)
     a = (1 - ci) / 2
     return {k: (float(np.nanpercentile(v, 100 * a)), float(np.nanpercentile(v, 100 * (1 - a)))) for k, v in samples.items()}
@@ -126,11 +139,11 @@ def bootstrap_ci(y: np.ndarray, p: np.ndarray, groups: np.ndarray, threshold: fl
 
 def summarize_oof(oof: pd.DataFrame, val_cfg: dict[str, Any], seed: int) -> dict[str, Any]:
     """Métricas por repetición (media ± DE) y, sobre la probabilidad media por sujeto, IC bootstrap."""
-    thr, nb = float(val_cfg["threshold"]), int(val_cfg["ece_bins"])
-    per_rep = pd.DataFrame([compute_metrics(g.y.to_numpy(), g.p.to_numpy(), thr, nb) for _, g in oof.groupby("rep")])
-    agg = oof.groupby("idx").agg(y=("y", "first"), p=("p", "mean"), group=("group", "first"))
-    point = compute_metrics(agg.y.to_numpy(), agg.p.to_numpy(), thr, nb)
-    ci = bootstrap_ci(agg.y.to_numpy(), agg.p.to_numpy(), agg.group.to_numpy(), thr, nb,
+    nb = int(val_cfg["ece_bins"])
+    per_rep = pd.DataFrame([compute_metrics(g.y.to_numpy(), g.p.to_numpy(), g.thr.to_numpy(), nb) for _, g in oof.groupby("rep")])
+    agg = oof.groupby("idx").agg(y=("y", "first"), p=("p", "mean"), thr=("thr", "mean"), group=("group", "first"))
+    point = compute_metrics(agg.y.to_numpy(), agg.p.to_numpy(), agg.thr.to_numpy(), nb)
+    ci = bootstrap_ci(agg.y.to_numpy(), agg.p.to_numpy(), agg.group.to_numpy(), agg.thr.to_numpy(), nb,
                       int(val_cfg["bootstrap"]["n"]), float(val_cfg["bootstrap"]["ci"]), seed)
     return {"per_repeat_mean": per_rep.mean().to_dict(), "per_repeat_sd": per_rep.std().to_dict(),
             "pooled_point": point, "pooled_ci": ci, "subject_level_predictions": agg}

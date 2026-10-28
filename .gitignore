@@ -1,6 +1,6 @@
-# Datos clínicos: nunca se versionan (licencia/consentimiento de la fuente pendientes)
+# Datos de entrada (data/raw) se versionan; confirmar licencia de la fuente antes de hacer público el repo
 data/raw/*
-*.csv
+outputs/**/*.csv
 # Artefactos de ejecución (contienen predicciones por sujeto y modelos serializados)
 outputs/*
 *.pkl
@@ -15,3 +15,4 @@ __pycache__/
 # Mantener la estructura de carpetas vacías
 !data/raw/.gitkeep
 !outputs/.gitkeep
+outputs_smoke/

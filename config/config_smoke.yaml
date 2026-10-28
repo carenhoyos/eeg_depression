@@ -1,0 +1,296 @@
+# Configuración reducida para prueba rápida del pipeline completo (no para resultados).
+project:
+  name: eeg_depression_screening
+  seed: 42
+  output_dir: outputs_smoke
+  n_jobs: -1
+data:
+  csv_path: data/raw/machinelearning_data_EEG.csv
+  kind: features
+  label_column: specific.disorder
+  positive_class: Depressive disorder
+  negative_class: Healthy control
+  subject_column: null
+  time_column: null
+  epoch_column: null
+  drop_columns:
+  - 'Unnamed: 122'
+  column_patterns:
+    power: ^(?P<band>[A-Za-z]+)\.(?P<ch1>[A-Za-z0-9]+)$
+    coherence: ^COH\.(?P<band>[A-Za-z]+)\.(?P<ch1>[A-Za-z0-9]+)\.(?P<ch2>[A-Za-z0-9]+)$
+  power_units: uV^2 (potencia absoluta por banda, a confirmar)
+  coherence_units: percent (0-100)
+acquisition:
+  sampling_rate_hz: null
+  reference: null
+  condition: null
+  device: null
+  line_noise_hz: 60
+  site: Un solo sitio, Corea del Sur (a confirmar)
+  epoch_length_s_source: null
+channels:
+  list:
+  - FP1
+  - FP2
+  - F7
+  - F3
+  - Fz
+  - F4
+  - F8
+  - T3
+  - C3
+  - Cz
+  - C4
+  - T4
+  - T5
+  - P3
+  - Pz
+  - P4
+  - T6
+  - O1
+  - O2
+  rename:
+    FP1: Fp1
+    FP2: Fp2
+    T3: T7
+    T4: T8
+    T5: P7
+    T6: P8
+  montage: standard_1020
+  regions:
+    frontal:
+    - Fp1
+    - Fp2
+    - F7
+    - F3
+    - Fz
+    - F4
+    - F8
+    central:
+    - C3
+    - Cz
+    - C4
+    temporal:
+    - T7
+    - T8
+    - P7
+    - P8
+    parietal:
+    - P3
+    - Pz
+    - P4
+    occipital:
+    - O1
+    - O2
+  asymmetry_pairs:
+  - - Fp1
+    - Fp2
+  - - F7
+    - F8
+  - - F3
+    - F4
+  - - C3
+    - C4
+  - - T7
+    - T8
+  - - P3
+    - P4
+  - - P7
+    - P8
+  - - O1
+    - O2
+bands:
+  delta:
+  - 1
+  - 4
+  theta:
+  - 4
+  - 8
+  alpha:
+  - 8
+  - 12
+  beta:
+  - 12
+  - 25
+  highbeta:
+  - 25
+  - 30
+  gamma:
+  - 30
+  - 40
+preprocessing:
+  bandpass_hz:
+  - 1.0
+  - 40.0
+  notch_hz:
+  - 60.0
+  rereference: average
+  ica:
+    enabled: true
+    method: picard
+    n_components: 15
+    eog_proxy_channels:
+    - Fp1
+    - Fp2
+    muscle_score_threshold: 0.5
+  epoch:
+    length_s: 2.0
+    overlap_fraction: 0.5
+  reject:
+    peak_to_peak_uv: 150.0
+    flat_uv: 1.0
+qc:
+  duplicate_policy: same_group
+  log_transform_power: true
+  robust_z_threshold: 5.0
+  max_flagged_fraction: 0.1
+  drop_rows_failing_qc: false
+  coherence_range:
+  - 0.0
+  - 100.0
+features:
+  absolute_power:
+    enabled: false
+    log10: true
+  relative_power:
+    enabled: true
+  regional_relative_power:
+    enabled: true
+  asymmetry:
+    enabled: true
+    bands:
+    - alpha
+  coherence:
+    enabled: true
+    mode: regional
+    bands:
+    - delta
+    - theta
+    - alpha
+    - beta
+    - highbeta
+    - gamma
+  wpli:
+    enabled: false
+  nonlinear:
+    enabled: false
+    measures:
+    - sample_entropy
+    - higuchi_fd
+    - dfa
+validation:
+  holdout:
+    enabled: true
+    fraction: 0.2
+  outer:
+    scheme: group_kfold
+    n_splits: 3
+    n_repeats: 1
+  inner:
+    n_splits: 3
+  scoring: roc_auc
+  threshold:
+    strategy: train_prevalence
+    value: 0.5
+  scaler: standard
+  feature_selection:
+    method: kbest_f
+    k_grid:
+    - 20
+  calibration:
+    enabled: true
+    method: sigmoid
+    cv: 2
+  bootstrap:
+    n: 100
+    ci: 0.95
+  permutation_test:
+    enabled: true
+    n_permutations: 3
+  ece_bins: 10
+models:
+  svm_linear:
+    type: svm
+    params:
+      kernel: linear
+      class_weight: balanced
+      probability: true
+      max_iter: -1
+    grid:
+      clf__C:
+      - 0.001
+  svm_rbf:
+    type: svm
+    params:
+      kernel: rbf
+      class_weight: balanced
+      probability: true
+    grid:
+      clf__C:
+      - 0.1
+      clf__gamma:
+      - scale
+  random_forest:
+    type: random_forest
+    params:
+      n_estimators: 50
+      class_weight: balanced_subsample
+      min_samples_leaf: 3
+    grid:
+      clf__max_features:
+      - sqrt
+      clf__max_depth:
+      - null
+  logistic_l2:
+    type: logistic
+    params:
+      penalty: l2
+      class_weight: balanced
+      max_iter: 5000
+      solver: liblinear
+    grid:
+      clf__C:
+      - 0.01
+deep:
+  enabled: false
+  model: eegnet
+  epochs: 100
+  batch_size: 32
+  lr: 0.001
+  F1: 8
+  D: 2
+  F2: 16
+  dropout: 0.5
+  early_stopping_patience: 15
+report:
+  metrics:
+  - auc
+  - sensitivity
+  - specificity
+  - f1
+  - balanced_accuracy
+  - brier
+  - ece
+  ci_metrics:
+  - auc
+  - balanced_accuracy
+  decimals: 3
+plotting:
+  sequential_cmap: Blues
+  diverging_cmap: RdBu_r
+  color_primary: '#2a6fdb'
+  color_negative: '#d1495b'
+  color_reference: '#9a9a9a'
+  dpi: 150
+  topomap_contours: 4
+interpretability:
+  univariate_metric: auc
+  permutation_importance_repeats: 3
+  top_k_features: 25
+  topomap_bands:
+  - delta
+  - theta
+  - alpha
+  - beta
+  - highbeta
+  - gamma
