@@ -74,7 +74,11 @@ def condition_spans(set_path: Path, cond_cfg: dict[str, Any], which: str) -> lis
     """Bloques [t0, t1] de la condición a partir de events.tsv (marcadores periódicos agrupados por cercanía)."""
     ev = pd.read_csv(set_path.with_name(set_path.name.replace("_eeg.set", "_events.tsv")), sep="\t")
     pat = re.compile(cond_cfg["patterns"][which])
-    onsets = np.sort(ev.loc[ev[cond_cfg["event_column"]].astype(str).str.match(pat), "onset"].to_numpy(float))
+    mask = ev[cond_cfg["event_column"]].astype(str).str.match(pat)
+    if not mask.any() and cond_cfg.get("value_codes"):
+        codes = {str(c) for c in cond_cfg["value_codes"][which]}
+        mask = ev[cond_cfg["value_column"]].astype(str).isin(codes)
+    onsets = np.sort(ev.loc[mask, "onset"].to_numpy(float))
     if len(onsets) == 0:
         return []
     gaps = np.diff(onsets)

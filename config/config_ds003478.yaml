@@ -37,6 +37,10 @@ data:
     use: eyes_closed                    # eyes_closed | eyes_open | both
     event_column: trial_type
     patterns: {eyes_closed: "^Eyes Closed", eyes_open: "^Eyes Open"}
+    # Respaldo: en 33 sujetos trial_type es solo "STATUS"; el bloque se identifica por el código de `value`
+    # (verificado en los 83 sujetos etiquetados: 1,3,5 y 11,13,15 = ojos cerrados; 2,4,6 y 12,14,16 = ojos abiertos).
+    value_column: value
+    value_codes: {eyes_closed: [1, 3, 5, 11, 13, 15], eyes_open: [2, 4, 6, 12, 14, 16]}
     block_gap_s: 5.0                    # separación entre marcadores que define un bloque nuevo
     min_block_s: 20.0
 

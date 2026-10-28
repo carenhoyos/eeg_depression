@@ -29,11 +29,15 @@ def _signal_excerpt(raw, settings: Settings) -> dict[str, Any]:
     """Fragmento submuestreado de la señal limpia + PSD por canal, para el visor interactivo."""
     sig = settings.signal_viewer
     sf = float(raw.info["sfreq"])
-    t0, dur = float(sig.excerpt_start_s), float(sig.excerpt_duration_s)
-    seg = raw.copy().crop(tmin=min(t0, max(0.0, raw.times[-1] - dur)), tmax=min(raw.times[-1], t0 + dur))
+    dur = float(sig.excerpt_duration_s)
+    total = float(raw.times[-1])
+    t0 = float(sig.excerpt_start_s) if sig.excerpt_start_s is not None else max(0.0, total / 2 - dur / 2)
+    t0 = min(t0, max(0.0, total - dur))
+    seg = raw.copy().crop(tmin=t0, tmax=min(total, t0 + dur))
     step = max(1, int(round(sf / float(sig.excerpt_sfreq))))
     data = (seg.get_data() * 1e6)[:, ::step]
-    spec = raw.compute_psd(method="welch", fmin=float(sig.psd_fmin), fmax=float(sig.psd_fmax), verbose=False)
+    n_seg = int(float(sig.psd_nperseg_s) * sf)
+    spec = raw.compute_psd(method="welch", fmin=float(sig.psd_fmin), fmax=float(sig.psd_fmax), n_fft=n_seg, n_per_seg=n_seg, n_overlap=n_seg // 2, verbose=False)
     psd, freqs = spec.get_data(return_freqs=True)
     return {"sfreq": sf / step, "channels": list(raw.ch_names), "t0": float(seg.times[0] + raw.first_time), "duration_s": float(seg.times[-1]),
             "data": np.round(data, 2).tolist(), "psd_freqs": np.round(freqs, 2).tolist(),

@@ -4,7 +4,7 @@
 # =====================================================================
 app:
   name: "EEG Depression Screening Support"
-  version: "0.1.0"
+  version: "0.2.0"
   host: "0.0.0.0"
   port: 8000
   cors_origins: ["*"]            # restringir en producción
@@ -32,16 +32,17 @@ database:
 
 # Visor de señal: fragmento de la señal limpia y espectro por canal que se devuelven en el informe.
 signal_viewer:
-  excerpt_start_s: 10.0
+  excerpt_start_s: null        # null = fragmento centrado en la mitad del registro
   excerpt_duration_s: 10.0
   excerpt_sfreq: 100.0
   psd_fmin: 1.0
   psd_fmax: 40.0
+  psd_nperseg_s: 2.0           # ventana de Welch (s): 2 s -> resolución 0.5 Hz, espectro suave
   trace_spacing_uv: 60.0
 
 model:
   bundle_path: models/release/latest/bundle.pkl
-  pipeline_config: config/config.yaml         # pipeline para SEÑAL CRUDA (canales, bandas, preprocesamiento, features)
+  pipeline_config: config/config_ds003478.yaml  # pipeline para SEÑAL CRUDA (mismo preprocesamiento que el entrenamiento del bundle)
   csv_features_config: config/config.yaml     # pipeline para CSV de características (estructura de columnas); null = el mismo
 
 input:

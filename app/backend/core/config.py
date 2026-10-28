@@ -64,11 +64,12 @@ class DatabaseSection(BaseModel):
 
 
 class SignalViewerSection(BaseModel):
-    excerpt_start_s: float
+    excerpt_start_s: Optional[float] = None
     excerpt_duration_s: float
     excerpt_sfreq: float
     psd_fmin: float
     psd_fmax: float
+    psd_nperseg_s: float
     trace_spacing_uv: float
 
 
