@@ -1,0 +1,170 @@
+# =====================================================================
+# Configuración única del pipeline EEG -> depresión (tamizaje, no diagnóstico)
+# Todo parámetro usado por el código vive aquí. Nada se hardcodea en funciones.
+# Rutas relativas se resuelven respecto a la raíz del repositorio.
+# =====================================================================
+
+project:
+  name: eeg_depression_screening
+  seed: 42
+  output_dir: outputs
+  n_jobs: -1
+
+data:
+  csv_path: data/raw/machinelearning_data_EEG.csv
+  # "features": el CSV ya trae características (potencia/coherencia) por registro.
+  # "raw": el CSV trae muestras en el tiempo (activa el bloque `preprocessing`).
+  kind: features
+  label_column: specific.disorder
+  positive_class: "Depressive disorder"
+  negative_class: "Healthy control"
+  # null => el archivo NO tiene identificador de sujeto. Se asume 1 fila = 1 registro
+  # = 1 sujeto y se genera subject_id a partir del índice de fila. Ver README/limitaciones.
+  subject_column: null
+  time_column: null
+  epoch_column: null
+  drop_columns: ["Unnamed: 122"]
+  # Expresiones regulares para interpretar los nombres de columna del CSV.
+  column_patterns:
+    power: "^(?P<band>[A-Za-z]+)\\.(?P<ch1>[A-Za-z0-9]+)$"
+    coherence: "^COH\\.(?P<band>[A-Za-z]+)\\.(?P<ch1>[A-Za-z0-9]+)\\.(?P<ch2>[A-Za-z0-9]+)$"
+  # Unidades según inspección (confirmar contra la fuente original).
+  power_units: "uV^2 (potencia absoluta por banda, a confirmar)"
+  coherence_units: "percent (0-100)"
+
+# Metadatos de adquisición: NO se pueden deducir del archivo. Rellenar tras
+# confirmar con la fuente de los datos. Se vuelcan al reporte TRIPOD+AI.
+acquisition:
+  sampling_rate_hz: null
+  reference: null            # p.ej. linked_ears | average | Cz
+  condition: null            # eyes_closed | eyes_open
+  device: null
+  line_noise_hz: 60
+  site: "Un solo sitio, Corea del Sur (a confirmar)"
+  epoch_length_s_source: null   # duración de los segmentos usados por la fuente
+
+channels:
+  # Nombres tal como aparecen en el CSV, en el orden deseado.
+  list: [FP1, FP2, F7, F3, Fz, F4, F8, T3, C3, Cz, C4, T4, T5, P3, Pz, P4, T6, O1, O2]
+  # Mapeo nomenclatura antigua -> 10-20 moderna (montaje standard_1020 de MNE).
+  rename: {FP1: Fp1, FP2: Fp2, T3: T7, T4: T8, T5: P7, T6: P8}
+  montage: standard_1020
+  # Regiones definidas con los nombres YA renombrados.
+  regions:
+    frontal:   [Fp1, Fp2, F7, F3, Fz, F4, F8]
+    central:   [C3, Cz, C4]
+    temporal:  [T7, T8, P7, P8]
+    parietal:  [P3, Pz, P4]
+    occipital: [O1, O2]
+  # Pares (izquierdo, derecho) para asimetría ln(derecho) - ln(izquierdo).
+  asymmetry_pairs: [[Fp1, Fp2], [F7, F8], [F3, F4], [C3, C4], [T7, T8], [P3, P4], [P7, P8], [O1, O2]]
+
+# Bandas (Hz). Deben coincidir en nombre con las del CSV cuando data.kind == features.
+bands:
+  delta:    [1, 4]
+  theta:    [4, 8]
+  alpha:    [8, 12]
+  beta:     [12, 25]
+  highbeta: [25, 30]
+  gamma:    [30, 40]
+
+# Solo aplica cuando data.kind == raw. Con el CSV actual este bloque se omite.
+preprocessing:
+  bandpass_hz: [1.0, 40.0]
+  notch_hz: [60.0]
+  rereference: average        # average | linked_ears | none
+  ica:
+    enabled: true
+    method: picard
+    n_components: 15
+    eog_proxy_channels: [Fp1, Fp2]
+    muscle_score_threshold: 0.5
+  epoch:
+    length_s: 2.0
+    overlap_fraction: 0.5
+  reject:
+    peak_to_peak_uv: 150.0
+    flat_uv: 1.0
+
+qc:
+  # Filas con el bloque de potencia idéntico: same_group | drop | keep
+  duplicate_policy: same_group
+  log_transform_power: true           # z robusto sobre log10(potencia)
+  robust_z_threshold: 5.0             # |z robusto| (mediana/MAD) por característica
+  max_flagged_fraction: 0.10          # fracción de features de potencia marcadas para fallar QC
+  drop_rows_failing_qc: false         # true => se descartan; false => se marcan y reportan
+  coherence_range: [0.0, 100.0]
+
+features:
+  absolute_power: {enabled: false, log10: true}
+  relative_power: {enabled: true}
+  regional_relative_power: {enabled: true}
+  asymmetry: {enabled: true, bands: [alpha]}      # una característica más, no el eje
+  coherence:
+    enabled: true
+    mode: regional                                # all (1026) | regional (90) | none
+    bands: [delta, theta, alpha, beta, highbeta, gamma]
+  # Solo con señal cruda:
+  wpli: {enabled: false}
+  nonlinear: {enabled: false, measures: [sample_entropy, higuchi_fd, dfa]}
+
+validation:
+  holdout:
+    enabled: true
+    fraction: 0.20          # sujetos reservados que el modelo nunca ve
+  outer:
+    scheme: group_kfold     # group_kfold | loso
+    n_splits: 5
+    n_repeats: 5
+  inner:
+    n_splits: 5
+  scoring: roc_auc
+  threshold: 0.5
+  scaler: standard          # standard | robust | none
+  feature_selection:
+    method: kbest_f         # kbest_f | none
+    k_grid: [20, 50, 100]
+  calibration:
+    enabled: true
+    method: sigmoid         # sigmoid | isotonic
+    cv: 3
+  bootstrap: {n: 2000, ci: 0.95}
+  permutation_test: {enabled: true, n_permutations: 100}
+  ece_bins: 10
+
+models:
+  svm_linear:
+    type: svm
+    params: {kernel: linear, class_weight: balanced, probability: true, max_iter: -1}
+    grid: {clf__C: [0.001, 0.01, 0.1, 1.0]}
+  svm_rbf:
+    type: svm
+    params: {kernel: rbf, class_weight: balanced, probability: true}
+    grid: {clf__C: [0.1, 1.0, 10.0], clf__gamma: [scale, 0.001, 0.01]}
+  random_forest:
+    type: random_forest
+    params: {n_estimators: 500, class_weight: balanced_subsample, min_samples_leaf: 3}
+    grid: {clf__max_features: [sqrt, 0.2], clf__max_depth: [null, 6]}
+  logistic_l2:
+    type: logistic
+    params: {penalty: l2, class_weight: balanced, max_iter: 5000, solver: liblinear}
+    grid: {clf__C: [0.01, 0.1, 1.0]}
+
+# CNN compacta (EEGNet) sobre señal cruda. Inactiva: el CSV no trae señal cruda.
+deep:
+  enabled: false
+  model: eegnet
+  epochs: 100
+  batch_size: 32
+  lr: 0.001
+  F1: 8
+  D: 2
+  F2: 16
+  dropout: 0.5
+  early_stopping_patience: 15
+
+interpretability:
+  univariate_metric: auc              # auc | cohen_d
+  permutation_importance_repeats: 30
+  top_k_features: 25
+  topomap_bands: [delta, theta, alpha, beta, highbeta, gamma]
