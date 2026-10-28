@@ -1,0 +1,10 @@
+pandas>=2.0
+numpy>=1.24
+scipy>=1.10
+scikit-learn>=1.4
+pyyaml>=6
+matplotlib>=3.7
+mne>=1.6
+# Solo si hay señal cruda (data.kind == raw) y deep.enabled == true:
+# torch>=2.0
+# braindecode>=0.8

@@ -1,0 +1,17 @@
+# Datos clínicos: nunca se versionan (licencia/consentimiento de la fuente pendientes)
+data/
+*.csv
+# Artefactos de ejecución (contienen predicciones por sujeto y modelos serializados)
+outputs/
+*.pkl
+*.parquet
+# Entornos y caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+# Mantener la estructura de carpetas vacías
+!data/raw/.gitkeep
+!outputs/.gitkeep
