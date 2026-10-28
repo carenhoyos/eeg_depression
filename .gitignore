@@ -1,5 +1,4 @@
 # Datos de entrada (data/raw) se versionan; confirmar licencia de la fuente antes de hacer público el repo
-data/raw/*
 outputs/**/*.csv
 # Artefactos de ejecución (contienen predicciones por sujeto y modelos serializados)
 outputs/*
@@ -13,6 +12,5 @@ __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 # Mantener la estructura de carpetas vacías
-!data/raw/.gitkeep
 !outputs/.gitkeep
 outputs_smoke/
