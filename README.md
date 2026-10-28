@@ -70,6 +70,35 @@ python scripts/06_export_bundle.py --config config/config_ds003478.yaml --versio
 `07_deep_eegnet.py` entrena EEGNet (PyTorch) sobre las épocas crudas con el mismo holdout y validación por sujeto;
 `08_cross_site.py` aplica el modelo final a las características del otro conjunto (transferencia entre sitios).
 
+## Resultados (validación por sujeto; `outputs*/04_metrics_table.csv`)
+
+**CSV coreano (294 registros, características precalculadas; holdout 58 sujetos):**
+
+| Modelo | AUC CV (IC95) | Exact. balanceada CV | AUC holdout (IC95) | p permutación |
+|---|---|---|---|---|
+| svm_linear | 0.66 (0.61–0.76) | 0.62 | 0.74 (0.61–0.86) | 0.01 |
+| svm_rbf | 0.65 (0.60–0.75) | 0.62 | 0.74 (0.61–0.86) | 0.01 |
+| random_forest | 0.66 (0.61–0.76) | 0.64 | 0.81 (0.67–0.92) | 0.01 |
+| logistic_l2 | 0.66 (0.61–0.75) | 0.62 | 0.77 (0.64–0.88) | 0.01 |
+
+**ds003478 (119 sujetos, señal cruda, ojos cerrados, BDI ≥ 13 vs < 7; holdout 24 sujetos):**
+
+| Modelo | AUC CV (IC95) | Exact. balanceada CV | AUC holdout (IC95) | p permutación |
+|---|---|---|---|---|
+| svm_linear | 0.63 (0.52–0.75) | 0.61 | 0.63 (0.36–0.88) | 0.03 |
+| svm_rbf | 0.60 (0.50–0.73) | 0.58 | 0.87 (0.70–1.00) | 0.02 |
+| random_forest | 0.66 (0.55–0.78) | 0.62 | 0.61 (0.33–0.86) | 0.01 |
+| logistic_l2 | 0.58 (0.49–0.72) | 0.59 | 0.63 (0.36–0.88) | 0.10 |
+
+**Transferencia entre sitios** (modelo final de un conjunto aplicado a las características del otro; AUC con IC95):
+
+| Dirección | svm_linear | random_forest | logistic_l2 |
+|---|---|---|---|
+| ds003478 → CSV coreano | 0.60 (0.53–0.66) | 0.57 (0.50–0.64) | 0.59 (0.52–0.66) |
+| CSV coreano → ds003478 | 0.57 (0.46–0.67) | 0.56 (0.45–0.68) | 0.55 (0.45–0.66) |
+
+Lectura: señal débil pero por encima del azar en ambos conjuntos (AUC 0.58–0.66 por sujeto); el holdout de ds003478 es demasiado pequeño (24 sujetos) para discriminar entre modelos; la transferencia entre sitios es marginal (AUC ≈ 0.55–0.60). Ninguna de estas cifras justifica uso clínico; sustentan únicamente un prototipo de apoyo con validación externa pendiente.
+
 ## Aplicación web (API + cliente React)
 
 ```bash
