@@ -1,0 +1,13 @@
+# MVP: un servicio. Para escalar: añadir redis + worker (RQ/Celery) y mover InProcessQueue a un adaptador de cola.
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      EEGDEP_APP_CONFIG: /srv/app/config/app.yaml
+      EEGDEP_APP__STORAGE_DIR: /data/storage
+      EEGDEP_APP__CORS_ORIGINS: '["http://localhost:8000"]'
+    volumes:
+      - storage:/data/storage
+volumes:
+  storage: {}
