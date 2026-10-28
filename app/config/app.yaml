@@ -1,0 +1,71 @@
+# =====================================================================
+# Configuración de la aplicación web (API + reporte). Nada se hardcodea en el código.
+# Rutas relativas se resuelven respecto a la raíz del repositorio.
+# =====================================================================
+app:
+  name: "EEG Depression Screening Support"
+  version: "0.1.0"
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins: ["*"]            # restringir en producción
+  storage_dir: app/storage       # backend local de archivos; reemplazable por S3/GCS
+  max_upload_mb: 200
+  api_prefix: /api/v1
+  frontend_dir: app/frontend/dist   # build de Vite (npm run build)
+
+model:
+  bundle_path: models/release/latest/bundle.pkl
+  pipeline_config: config/config.yaml   # define canales, bandas, features, preprocesamiento
+
+input:
+  # Formatos aceptados y cómo se reconocen por extensión.
+  formats:
+    csv_features: [".csv"]       # misma estructura que el CSV de entrenamiento (features precalculadas)
+    edf: [".edf", ".bdf"]        # señal cruda
+    csv_raw: [".tsv", ".rawcsv"] # señal cruda en columnas (muestras x canales); requiere sampling_rate_hz
+  raw:
+    default_sampling_rate_hz: null   # si el archivo no la trae, el usuario debe indicarla
+    min_duration_s: 60
+    coherence_nperseg_s: 2.0
+
+report:
+  language: es
+  # Prevalencia pre-test por defecto para convertir la probabilidad calibrada (prevalencia de entrenamiento)
+  # a probabilidad posterior en el contexto clínico del usuario. El clínico puede cambiarla por análisis.
+  pretest_prevalence_default: 0.30
+  # Niveles sobre la probabilidad POSTERIOR. Deben cubrir [0, 1] sin solaparse.
+  tiers:
+    - {name: "Baja probabilidad", min: 0.00, max: 0.25, code: low,
+       text: "El patrón EEG es poco compatible con trastorno depresivo según el modelo."}
+    - {name: "Indeterminado", min: 0.25, max: 0.55, code: indeterminate,
+       text: "El modelo no discrimina con suficiente confianza. Se recomienda evaluación clínica completa."}
+    - {name: "Probabilidad elevada", min: 0.55, max: 1.00, code: elevated,
+       text: "El patrón EEG es compatible con trastorno depresivo según el modelo. Requiere confirmación clínica."}
+  reference_group: controls          # controls | all : grupo de referencia para percentiles y z
+  reference_percentiles: [5, 25, 50, 75, 95]
+  deviation_z_threshold: 1.5         # |z| para listar hallazgos destacados
+  max_findings: 12
+  top_contributions: 10
+  topomap_bands: [delta, theta, alpha, beta, highbeta, gamma]
+  coherence_matrix_band: alpha
+  figures_dpi: 130
+  pdf:
+    page_size: A4
+    title: "Informe de apoyo al tamizaje de depresión mayor a partir de EEG"
+  disclaimer: >
+    Este informe es generado por un modelo de apoyo a la decisión en fase de investigación.
+    No constituye un diagnóstico ni sustituye la evaluación clínica. El modelo fue desarrollado con
+    registros de una sola población y un solo centro, con características precalculadas y sin validación externa.
+    La interpretación corresponde exclusivamente al profesional de salud tratante.
+  limitations:
+    - "Modelo entrenado con características precalculadas de un solo centro (Corea del Sur), sin validación externa."
+    - "El archivo de entrenamiento no incluía identificador de sujeto ni variables demográficas; no se evaluó el rendimiento por edad, sexo o medicación."
+    - "La probabilidad posterior depende de la prevalencia pre-test indicada por el usuario; cambiarla cambia la clasificación."
+    - "Las señales crudas se procesan con un pipeline distinto al del extractor original: posible desplazamiento de dominio."
+  plotting:
+    sequential_cmap: Blues
+    diverging_cmap: RdBu_r
+    color_primary: "#2a6fdb"
+    color_negative: "#d1495b"
+    color_reference: "#9a9a9a"
+    tier_colors: {low: "#3c9d6a", indeterminate: "#d9a400", elevated: "#d1495b"}
