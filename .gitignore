@@ -1,8 +1,8 @@
 # Datos clínicos: nunca se versionan (licencia/consentimiento de la fuente pendientes)
-data/
+data/raw/*
 *.csv
 # Artefactos de ejecución (contienen predicciones por sujeto y modelos serializados)
-outputs/
+outputs/*
 *.pkl
 *.parquet
 # Entornos y caches
