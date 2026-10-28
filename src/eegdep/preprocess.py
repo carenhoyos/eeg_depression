@@ -45,10 +45,11 @@ def run_ica(raw: mne.io.BaseRaw, ica_cfg: dict[str, Any], seed: int) -> tuple[mn
         eog_idx += idx
     mus_idx, mus_scores = ica.find_bads_muscle(raw, threshold=ica_cfg["muscle_score_threshold"], verbose=False)
     # Prioridad: oculares primero; musculares ordenados por puntuación; tope configurable de componentes excluidos.
-    mus_sorted = sorted(mus_idx, key=lambda i: -float(mus_scores[i]))
-    excl = list(dict.fromkeys(sorted(set(eog_idx)) + mus_sorted))[: int(ica_cfg.get("max_excluded", len(ica_cfg) and 99))]
+    mus_sorted = sorted((int(i) for i in mus_idx), key=lambda i: -float(mus_scores[i]))
+    eog_sorted = sorted({int(i) for i in eog_idx})
+    excl = list(dict.fromkeys(eog_sorted + mus_sorted))[: int(ica_cfg.get("max_excluded", 99))]
     ica.exclude = excl
-    return ica.apply(raw.copy(), verbose=False), {"eog": sorted(set(eog_idx)), "muscle": mus_idx, "excluded": excl}
+    return ica.apply(raw.copy(), verbose=False), {"eog": eog_sorted, "muscle": [int(i) for i in mus_idx], "excluded": excl}
 
 
 def make_epochs(raw: mne.io.BaseRaw, length_s: float, overlap_fraction: float, reject_cfg: dict[str, float]) -> tuple[mne.Epochs, dict[str, int]]:

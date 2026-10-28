@@ -151,7 +151,14 @@ def clean_raw(set_path: Path, cfg: dict[str, Any], seed: int) -> tuple[mne.io.Ba
 
 
 def subject_record(subject: str, set_paths: list[Path], cfg: dict[str, Any], seed: int) -> dict[str, Any]:
-    """Procesa todas las corridas de un sujeto y devuelve potencia, coherencia, épocas y log."""
+    """Procesa un sujeto; cualquier fallo se devuelve como {"error": ...} para no abortar el lote."""
+    try:
+        return _subject_record(subject, set_paths, cfg, seed)
+    except Exception as e:  # noqa: BLE001
+        return {"subject": subject, "runs": [p.name for p in set_paths], "spans": [], "error": f"{type(e).__name__}: {e}"}
+
+
+def _subject_record(subject: str, set_paths: list[Path], cfg: dict[str, Any], seed: int) -> dict[str, Any]:
     pre, dc = cfg["preprocessing"], cfg["data"]
     bands = cfg["bands"]
     which = dc["condition"]["use"]

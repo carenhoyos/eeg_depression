@@ -59,11 +59,24 @@ El caso de uso `run_analysis` no conoce FastAPI: puede ejecutarse igual en un wo
 ```
 api/client.ts          cliente axios tipado (prefijo desde VITE_API_PREFIX)
 types.ts               espejo del contrato Pydantic
-components/UploadForm  formulario + sondeo de estado (useMutation)
-components/ReportView  página del informe (useQuery) con niveles, tablas y figuras
-components/charts      ProbabilityBar, BandPowerChart, ContributionsChart, TopographyGrid, CoherenceHeatmap (desde JSON)
-App.tsx                rutas: / (nuevo análisis), /history, /analyses/:id
+auth.tsx               contexto de sesión (token en localStorage, interceptor 401)
+pages/Login            acceso del profesional
+pages/Patients         registro y listado de pacientes (pseudónimos)
+pages/PatientDetail    ficha, tendencia de probabilidad posterior, historial y nuevo análisis
+pages/NewAnalysis      análisis suelto o asociado a paciente
+components/UploadForm  carga multi-archivo (.set + .fdt), condición, prevalencia pre-test; sondeo de estado
+components/ReportView  informe: nivel, valoración preliminar, visor de señal, PSD, cuantitativo, modelo y limitaciones
+components/charts      ProbabilityBar, BandPowerChart, ContributionsChart, TopographyGrid, CoherenceHeatmap, SignalViewer, PsdChart, TrendChart
+App.tsx                rutas protegidas: /login, /patients, /patients/:id, /analyses/new, /analyses/:id
 ```
+
+### Autenticación, pacientes y datos
+
+- `core/security.py`: PBKDF2 para contraseñas, JWT (PyJWT) con rol; `allowed_roles` en configuración. Rol actual: `psychiatrist`.
+- `infra/db.py`: SQLAlchemy 2.0 (`users`, `patients`, `analyses`). SQLite por defecto; Postgres cambiando `database.url`.
+- Un análisis pertenece a un usuario y, opcionalmente, a un paciente; su resumen (probabilidad, nivel, versión del
+  modelo) se guarda en la tabla `analyses` al terminar, para el historial y la tendencia por paciente.
+- Los pacientes se registran solo con pseudónimo, edad, sexo, medicación y notas: nunca identificadores directos.
 
 ## 3. Flujo de un análisis
 
@@ -73,7 +86,9 @@ App.tsx                rutas: / (nuevo análisis), /history, /analyses/:id
    `read_raw_file` → filtros, notch, referencia, ICA, épocas, rechazo → potencia por banda y coherencia →
    `build_feature_table`. Toda esta ruta usa `config/config.yaml`.
 3. `predict_record`: probabilidad calibrada → razón de verosimilitud → **probabilidad posterior a la prevalencia
-   pre-test indicada** → nivel (`report.tiers`) → z-scores frente al grupo de referencia → contribuciones (modelo lineal).
+   pre-test indicada** → nivel (`report.tiers`) → z-scores frente al grupo de referencia → contribuciones (modelo lineal)
+   → **valoración preliminar** generada desde `report.assessment_template`.
+   Con señal cruda, además: fragmento de señal limpia y PSD por canal (`signal_viewer.*`) para el visor interactivo.
 4. Figuras (matplotlib, un tono para magnitud, divergente para polaridad), PDF (fpdf2) e informe JSON.
 5. `GET /api/v1/analyses/{id}/status` → `GET /api/v1/analyses/{id}` → figuras y `report.pdf`.
 

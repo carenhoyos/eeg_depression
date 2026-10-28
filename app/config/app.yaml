@@ -41,7 +41,8 @@ signal_viewer:
 
 model:
   bundle_path: models/release/latest/bundle.pkl
-  pipeline_config: config/config.yaml   # define canales, bandas, features, preprocesamiento
+  pipeline_config: config/config.yaml         # pipeline para SEÑAL CRUDA (canales, bandas, preprocesamiento, features)
+  csv_features_config: config/config.yaml     # pipeline para CSV de características (estructura de columnas); null = el mismo
 
 input:
   # Formatos aceptados y cómo se reconocen por extensión.

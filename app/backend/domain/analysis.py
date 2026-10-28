@@ -52,7 +52,7 @@ def _assessment(r: dict[str, Any], tier: dict[str, Any], findings: list[dict[str
 
 def run_analysis(analysis_id: str, workdir: Path, input_path: Path, kind: str, recording: dict[str, Any],
                  pretest: float, sampling_rate_hz: Optional[float], settings: Settings, bundle: ModelBundle,
-                 pipeline_cfg: dict[str, Any]) -> dict[str, Any]:
+                 pipeline_cfg: dict[str, Any], csv_cfg: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """Ejecuta el pipeline completo y devuelve el informe (dict serializable). Escribe figuras y PDF en workdir."""
     rep = settings.report
     set_seeds(int(pipeline_cfg["project"]["seed"]))
@@ -60,7 +60,7 @@ def run_analysis(analysis_id: str, workdir: Path, input_path: Path, kind: str, r
     log: dict[str, Any] = {}
     signal: Optional[dict[str, Any]] = None
     if kind == "csv_features":
-        fs, X = features_from_csv(pd.read_csv(input_path), pipeline_cfg)
+        fs, X = features_from_csv(pd.read_csv(input_path), csv_cfg or pipeline_cfg)
         warnings.append("Entrada de características precalculadas: no hay señal para el visor ni control de artefactos propio.")
     else:
         raw = read_raw_file(input_path, kind, pipeline_cfg, sampling_rate_hz or settings.input.raw.default_sampling_rate_hz)

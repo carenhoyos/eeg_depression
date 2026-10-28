@@ -53,6 +53,23 @@ python scripts/05_interpret.py
 Para experimentar, copia el YAML (p. ej. `config/exp_coh_all.yaml`) y cambia solo lo necesario
 (`features.coherence.mode: all`, `validation.outer.scheme: loso`, etc.).
 
+## Segundo conjunto de datos: señal cruda (OpenNeuro ds003478)
+
+`config/config_ds003478.yaml` activa el pipeline de señal cruda sobre el dataset BIDS "EEG: Depression rest"
+(Cavanagh et al., CC0; 122 universitarios, 64 canales, 500 Hz, ojos abiertos/cerrados). Etiqueta: BDI ≥ 13 frente a
+BDI < 7 (zona intermedia excluida), exclusiones del README original, bloques de ojos cerrados de la corrida 1.
+Por sujeto: remuestreo, notch, pasabanda, referencia promedio sobre 64 canales, ICA (cacheada), selección de los 19
+canales 10-20, épocas de 4 s con rechazo, potencia por banda y coherencia. Los datos viven fuera del repo (`data.bids_root`).
+
+```bash
+python -m openneuro download --dataset ds003478 --tag 1.1.0 --target_dir ../data/ds003478 --include "sub-*/eeg/*run-01*" --include participants.tsv
+for s in 02_standardize_qc 03_features 04_train_eval 05_interpret 07_deep_eegnet 08_cross_site; do python scripts/$s.py --config config/config_ds003478.yaml; done
+python scripts/06_export_bundle.py --config config/config_ds003478.yaml --version 0.2.0
+```
+
+`07_deep_eegnet.py` entrena EEGNet (PyTorch) sobre las épocas crudas con el mismo holdout y validación por sujeto;
+`08_cross_site.py` aplica el modelo final a las características del otro conjunto (transferencia entre sitios).
+
 ## Aplicación web (API + cliente React)
 
 ```bash
@@ -66,8 +83,11 @@ python -m pytest -q tests                               # pruebas de integració
 Desarrollo del frontend con recarga en caliente: `cd app/frontend && npm run dev` (reenvía la API al backend
 definido en `VITE_DEV_BACKEND`). Con Docker: `docker compose up --build`.
 
-Entradas aceptadas (configurables en `app/config/app.yaml`): CSV de características con la estructura de
-entrenamiento (`data/examples/sample_features.csv`), EDF/BDF o CSV de señal cruda (requiere frecuencia de muestreo).
+Rol de usuario: psiquiatra (JWT; usuario inicial definido en `auth.*` del `app.yaml`, sobreescribible por entorno).
+Pacientes identificados por pseudónimo, con historial de análisis y evolución de la probabilidad.
+Entradas aceptadas (configurables en `app/config/app.yaml`): señal cruda EDF/BDF, EEGLAB (.set + .fdt), FIF o CSV
+(requiere frecuencia de muestreo), y CSV de características con la estructura de entrenamiento
+(`data/examples/sample_features.csv`). Con señal cruda el informe incluye un visor de la señal limpia y su espectro.
 El informe (JSON, figuras y PDF) incluye probabilidad calibrada, razón de verosimilitud, probabilidad posterior a la
 prevalencia pre-test indicada, nivel de clasificación, desviaciones frente al grupo de referencia, contribuciones del
 modelo y la ficha de validación. Ver `docs/ARCHITECTURE.md`.

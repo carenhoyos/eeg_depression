@@ -30,6 +30,7 @@ class AppSection(BaseModel):
 class ModelSection(BaseModel):
     bundle_path: str
     pipeline_config: str
+    csv_features_config: Optional[str] = None
 
 
 class RawInput(BaseModel):

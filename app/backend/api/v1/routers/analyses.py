@@ -72,7 +72,7 @@ async def create_analysis(c: Container = Depends(get_container), user: CurrentUs
         c.db.update_analysis(analysis_id, **fields)
 
     c.queue.enqueue(analysis_id, lambda: run_analysis(analysis_id, d, dest, kind, recording, pretest, sampling_rate_hz,
-                                                     c.settings, c.bundle, c.pipeline_cfg), on_finish=_on_finish)
+                                                     c.settings, c.bundle, c.pipeline_cfg, c.csv_cfg), on_finish=_on_finish)
     return {"analysis_id": analysis_id, "status": "queued", "report_url": f"{c.settings.app.api_prefix}/analyses/{analysis_id}"}
 
 
