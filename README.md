@@ -89,6 +89,7 @@ python scripts/06_export_bundle.py --config config/config_ds003478.yaml --versio
 | svm_rbf | 0.60 (0.50–0.73) | 0.58 | 0.87 (0.70–1.00) | 0.02 |
 | random_forest | 0.66 (0.55–0.78) | 0.62 | 0.61 (0.33–0.86) | 0.01 |
 | logistic_l2 | 0.58 (0.49–0.72) | 0.59 | 0.63 (0.36–0.88) | 0.10 |
+| eegnet (señal cruda, 3 pliegues) | 0.56 (0.44–0.68) | 0.59 | 0.52 (0.28–0.75) | — |
 
 **Transferencia entre sitios** (modelo final de un conjunto aplicado a las características del otro; AUC con IC95):
 
@@ -97,7 +98,7 @@ python scripts/06_export_bundle.py --config config/config_ds003478.yaml --versio
 | ds003478 → CSV coreano | 0.60 (0.53–0.66) | 0.57 (0.50–0.64) | 0.59 (0.52–0.66) |
 | CSV coreano → ds003478 | 0.57 (0.46–0.67) | 0.56 (0.45–0.68) | 0.55 (0.45–0.66) |
 
-Lectura: señal débil pero por encima del azar en ambos conjuntos (AUC 0.58–0.66 por sujeto); el holdout de ds003478 es demasiado pequeño (24 sujetos) para discriminar entre modelos; la transferencia entre sitios es marginal (AUC ≈ 0.55–0.60). Ninguna de estas cifras justifica uso clínico; sustentan únicamente un prototipo de apoyo con validación externa pendiente.
+Lectura: señal débil pero por encima del azar en ambos conjuntos (AUC 0.58–0.66 por sujeto con modelos clásicos); EEGNet sobre señal cruda no supera el azar con 95 sujetos de entrenamiento (AUC 0.56 en CV, 0.52 en holdout, calibración pobre), confirmando que deep learning no está justificado a esta escala; el holdout de ds003478 es demasiado pequeño (24 sujetos) para discriminar entre modelos; la transferencia entre sitios es marginal (AUC ≈ 0.55–0.60). Ninguna de estas cifras justifica uso clínico; sustentan únicamente un prototipo de apoyo con validación externa pendiente.
 
 ## Aplicación web (API + cliente React)
 

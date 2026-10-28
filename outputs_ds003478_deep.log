@@ -1,1 +1,14 @@
-##### 07_deep_eegnet 14:08:16
+##### 07_deep_eegnet 17:24:44
+EEGNet: dev 95 sujetos, holdout 24, épocas/sujeto≈40, forma (19, 512)
+  [rep 0 fold 0] época 5: AUC val (sujeto) = 0.667
+  [rep 0 fold 0] época 10: AUC val (sujeto) = 0.778
+  rep 0 fold 0: val_auc=0.778 epochs=14 test_auc=0.554
+  [rep 0 fold 1] época 5: AUC val (sujeto) = 0.500
+  [rep 0 fold 1] época 10: AUC val (sujeto) = 0.667
+  rep 0 fold 1: val_auc=0.722 epochs=12 test_auc=0.663
+  [rep 0 fold 2] época 5: AUC val (sujeto) = 0.500
+  rep 0 fold 2: val_auc=0.500 epochs=7 test_auc=0.443
+  [final] época 5: AUC val (sujeto) = 0.750
+CV por sujeto: {'auc': 0.557, 'sensitivity': np.float64(0.895), 'specificity': np.float64(0.281), 'f1': 0.602, 'balanced_accuracy': 0.588, 'brier': 0.301, 'ece': 0.253}  IC AUC: (0.438, 0.677)
+HOLDOUT: {'auc': 0.516, 'sensitivity': np.float64(1.0), 'specificity': np.float64(0.062), 'f1': 0.516, 'balanced_accuracy': 0.531, 'brier': 0.328, 'ece': 0.319}  IC AUC: (0.277, 0.75)
+##### 08_cross_site 17:30:22

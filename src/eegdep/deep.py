@@ -54,9 +54,23 @@ class ChannelScaler:
         return (X - self.mu) / self.sd
 
 
+def subsample_epochs(epochs_by_subject: dict[str, np.ndarray], max_per_subject: int | None, seed: int) -> dict[str, np.ndarray]:
+    """Submuestreo aleatorio de épocas por sujeto para acotar el coste en CPU (configurable)."""
+    if not max_per_subject:
+        return epochs_by_subject
+    rng = np.random.default_rng(seed)
+    out = {}
+    for s, X in epochs_by_subject.items():
+        idx = rng.choice(len(X), size=min(len(X), int(max_per_subject)), replace=False)
+        out[s] = X[np.sort(idx)]
+    return out
+
+
 def train_eegnet(X_tr: np.ndarray, y_tr: np.ndarray, X_va: np.ndarray, y_va: np.ndarray, g_va: np.ndarray,
-                 deep_cfg: dict[str, Any], seed: int) -> tuple[EEGNet, dict[str, Any]]:
+                 deep_cfg: dict[str, Any], seed: int, log_prefix: str = "") -> tuple[EEGNet, dict[str, Any]]:
     torch.manual_seed(seed)
+    if deep_cfg.get("torch_threads"):
+        torch.set_num_threads(int(deep_cfg["torch_threads"]))
     dev = torch.device(deep_cfg["device"])
     model = EEGNet(X_tr.shape[1], X_tr.shape[2], deep_cfg["F1"], deep_cfg["D"], deep_cfg["F2"], deep_cfg["kernel_length"], deep_cfg["dropout"]).to(dev)
     pos_w = torch.tensor([(y_tr == 0).sum() / max(1, (y_tr == 1).sum())], dtype=torch.float32, device=dev)
@@ -80,6 +94,8 @@ def train_eegnet(X_tr: np.ndarray, y_tr: np.ndarray, X_va: np.ndarray, y_va: np.
             p = torch.sigmoid(model(Xv)).cpu().numpy()
         score = subject_auc(y_va, p, g_va)
         hist.append(float(score))
+        if deep_cfg.get("log_every_epochs") and (ep + 1) % int(deep_cfg["log_every_epochs"]) == 0:
+            print(f"{log_prefix}época {ep + 1}: AUC val (sujeto) = {score:.3f}", flush=True)
         if score > best:
             best, best_state, patience = score, {k: v.detach().clone() for k, v in model.state_dict().items()}, 0
         else:
