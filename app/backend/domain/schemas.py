@@ -6,8 +6,67 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
+# ----------------------------------------------------------------- auth / usuarios
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    role: str
+    full_name: str = ""
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserOut
+
+
+# ----------------------------------------------------------------- pacientes
+class PatientIn(BaseModel):
+    pseudonym: str = Field(..., max_length=64, description="Pseudónimo; nunca nombre ni documento")
+    age: Optional[int] = Field(None, ge=0, le=120)
+    sex: Optional[str] = Field(None, max_length=16)
+    medication: Optional[str] = Field(None, max_length=200)
+    notes: Optional[str] = Field(None, max_length=2000)
+
+
+class PatientUpdate(BaseModel):
+    pseudonym: Optional[str] = Field(None, max_length=64)
+    age: Optional[int] = Field(None, ge=0, le=120)
+    sex: Optional[str] = Field(None, max_length=16)
+    medication: Optional[str] = Field(None, max_length=200)
+    notes: Optional[str] = Field(None, max_length=2000)
+
+
+class PatientOut(PatientIn):
+    id: int
+    created_at: str
+
+
+class AnalysisSummary(BaseModel):
+    analysis_id: str
+    patient_id: Optional[int]
+    created_at: str
+    status: str
+    input_kind: str
+    filename: str
+    pretest_prevalence: float
+    condition: Optional[str] = None
+    p_calibrated: Optional[float] = None
+    p_posterior: Optional[float] = None
+    tier_code: Optional[str] = None
+    model_version: Optional[str] = None
+    error: Optional[str] = None
+
+
+# ----------------------------------------------------------------- informe
 class RecordingMeta(BaseModel):
-    patient_ref: Optional[str] = Field(None, description="Pseudónimo; nunca datos identificables")
+    patient_ref: Optional[str] = Field(None, description="Pseudónimo del paciente")
+    patient_id: Optional[int] = None
     age: Optional[int] = None
     sex: Optional[str] = None
     condition: Optional[str] = Field(None, description="eyes_closed | eyes_open")
@@ -46,6 +105,17 @@ class ChannelValue(BaseModel):
     value: float
 
 
+class SignalExcerpt(BaseModel):
+    """Fragmento de señal limpia submuestreado para el visor (uV) y espectro por canal (log10 uV^2/Hz)."""
+    sfreq: float
+    channels: list[str]
+    t0: float
+    duration_s: float
+    data: list[list[float]]           # (n_ch, n_t)
+    psd_freqs: list[float]
+    psd: list[list[float]]            # (n_ch, n_freq)
+
+
 class RecordResult(BaseModel):
     record_id: str
     p_calibrated: float
@@ -54,12 +124,14 @@ class RecordResult(BaseModel):
     p_posterior: float
     above_threshold: bool
     tier: Tier
+    preliminary_assessment: str
     findings: list[Finding]
     contributions: list[Contribution]
     band_relative_power: dict[str, float]
     band_reference: dict[str, dict[str, float]]
-    topography_z: dict[str, list[ChannelValue]]     # banda -> z por canal (para gráficos interactivos)
-    coherence_matrix: dict[str, Any]                # {band, channels, values[][]}
+    topography_z: dict[str, list[ChannelValue]]
+    coherence_matrix: dict[str, Any]
+    signal: Optional[SignalExcerpt] = None
 
 
 class ModelCard(BaseModel):
@@ -107,3 +179,4 @@ class ReportConfig(BaseModel):
     pretest_prevalence_default: float
     formats: dict[str, list[str]]
     max_upload_mb: int
+    conditions: list[str]

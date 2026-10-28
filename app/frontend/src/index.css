@@ -63,3 +63,16 @@ th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line
 th { color: var(--muted); font-weight: 600; }
 .disclaimer { margin-top: 16px; }
 .recharts-text { fill: var(--muted); font-size: 12px; }
+/* --- autenticación, pacientes, visor de señal --- */
+.header nav { align-items: center; }
+button.link { background: none; border: 0; color: var(--primary); font-weight: 600; cursor: pointer; padding: 0; font-size: 0.9rem; }
+button.secondary { background: transparent; color: var(--elevated); border: 1px solid var(--elevated); }
+.login { max-width: 420px; margin: 40px auto; }
+.assessment { background: color-mix(in srgb, var(--primary) 7%, transparent); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 4px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; font-weight: 600; color: #fff; }
+.tier-badge-low { background: var(--low); } .tier-badge-indeterminate { background: var(--indeterminate); } .tier-badge-elevated { background: var(--elevated); }
+.signal-viewer { width: 100%; }
+.signal-controls { display: flex; gap: 14px; align-items: center; font-size: 0.85rem; margin-bottom: 4px; flex-wrap: wrap; }
+label.inline { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+label.inline input[type=range] { width: 120px; margin: 0; }
+.signal-svg { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }

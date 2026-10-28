@@ -1,12 +1,14 @@
-// Gráficos interactivos construidos desde el JSON de la API (Recharts). Un solo eje por gráfico;
-// color por entidad, no por rango; leyenda cuando hay más de una serie; sin valores en cada punto.
+// Gráficos interactivos construidos desde el JSON de la API (Recharts + SVG). Un solo eje por gráfico;
+// color por entidad; leyenda cuando hay más de una serie; sin valores en cada punto.
+import { useMemo, useState } from 'react'
 import {
-  Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, ReferenceLine, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import type { Contribution, RecordResult, Tier } from '../types'
+import type { AnalysisSummary, Contribution, RecordResult, SignalExcerpt, Tier } from '../types'
 
 const fmtVal = (v: unknown, d = 3): string => (Array.isArray(v) ? `${Number(v[0]).toFixed(d)} – ${Number(v[1]).toFixed(d)}` : typeof v === 'number' ? v.toFixed(d) : String(v ?? ''))
 const css = (v: string) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || undefined
+const tierVar = (code: string) => css(`--${code}`)
 
 export function ProbabilityBar({ r, tiers }: { r: RecordResult; tiers: Tier[] }) {
   const p = 100 * r.p_posterior
@@ -28,7 +30,7 @@ export function ProbabilityBar({ r, tiers }: { r: RecordResult; tiers: Tier[] })
 export function BandPowerChart({ r }: { r: RecordResult }) {
   const data = Object.keys(r.band_relative_power).map((b) => {
     const ref = r.band_reference[b]
-    return { band: b, p5: ref.p5, iqr: [ref.p25, ref.p75], range: [ref.p5, ref.p95], patient: r.band_relative_power[b], p50: ref.p50 }
+    return { band: b, iqr: [ref.p25, ref.p75], range: [ref.p5, ref.p95], patient: r.band_relative_power[b] }
   })
   return (
     <ResponsiveContainer width="100%" height={260}>
@@ -64,7 +66,6 @@ export function ContributionsChart({ items }: { items: Contribution[] }) {
   )
 }
 
-// Posiciones 2D aproximadas (10-20) para un mapa esquemático interactivo; la topografía interpolada viene del PNG.
 const POS: Record<string, [number, number]> = {
   Fp1: [-0.3, 0.9], Fp2: [0.3, 0.9], F7: [-0.75, 0.55], F3: [-0.4, 0.5], Fz: [0, 0.5], F4: [0.4, 0.5], F8: [0.75, 0.55],
   T7: [-0.9, 0], C3: [-0.45, 0], Cz: [0, 0], C4: [0.45, 0], T8: [0.9, 0],
@@ -89,9 +90,7 @@ export function TopographyGrid({ r, zMax = 3 }: { r: RecordResult; zMax?: number
               const [x, y] = POS[channel] ?? [0, 0]
               return (
                 <g key={channel}>
-                  <circle cx={x} cy={-y} r={0.13} fill={color(value)} stroke="currentColor" strokeWidth={0.01}>
-                    <title>{`${channel}: z = ${value.toFixed(2)}`}</title>
-                  </circle>
+                  <circle cx={x} cy={-y} r={0.13} fill={color(value)} stroke="currentColor" strokeWidth={0.01}><title>{`${channel}: z = ${value.toFixed(2)}`}</title></circle>
                   <text x={x} y={-y + 0.03} fontSize={0.09} textAnchor="middle" fill="currentColor">{channel}</text>
                 </g>
               )
@@ -126,5 +125,75 @@ export function CoherenceHeatmap({ m }: { m: RecordResult['coherence_matrix'] })
       </svg>
       <p className="muted small">Coherencia {m.band} entre pares de canales (0–100 %).</p>
     </div>
+  )
+}
+
+/** Visor de señal: trazos apilados del fragmento limpio, con selección de canales y ganancia. */
+export function SignalViewer({ s }: { s: SignalExcerpt }) {
+  const [gain, setGain] = useState(1)
+  const [selected, setSelected] = useState<string[]>(s.channels)
+  const spacing = 100
+  const n = s.data[0]?.length ?? 0
+  const w = 1000, h = Math.max(200, selected.length * 26)
+  const paths = useMemo(() => selected.map((ch, i) => {
+    const row = s.data[s.channels.indexOf(ch)]
+    const y0 = 14 + i * (h - 28) / Math.max(1, selected.length - 1)
+    const pts = row.map((v, k) => `${(k / Math.max(1, n - 1)) * w},${y0 - (v * gain) / spacing * 24}`)
+    return { ch, y0, d: `M${pts.join('L')}` }
+  }), [s, selected, gain, h, n])
+  return (
+    <div className="signal-viewer">
+      <div className="signal-controls">
+        <label className="inline">Ganancia
+          <input type="range" min={0.25} max={4} step={0.25} value={gain} onChange={(e) => setGain(Number(e.target.value))} /> ×{gain}
+        </label>
+        <button type="button" className="link" onClick={() => setSelected(s.channels)}>todos</button>
+        <button type="button" className="link" onClick={() => setSelected(s.channels.filter((c) => /^(F|Fp)/.test(c)))}>frontales</button>
+        <button type="button" className="link" onClick={() => setSelected(s.channels.filter((c) => /^(P|O)/.test(c)))}>posteriores</button>
+      </div>
+      <svg viewBox={`0 0 ${w + 50} ${h}`} role="img" aria-label="Señal EEG limpia" className="signal-svg">
+        {paths.map(({ ch, y0, d }) => (
+          <g key={ch}>
+            <text x={0} y={y0 + 3} fontSize={10} fill="currentColor">{ch}</text>
+            <path d={d} transform="translate(45,0)" fill="none" stroke={css('--primary')} strokeWidth={0.8} />
+          </g>
+        ))}
+      </svg>
+      <p className="muted small">Fragmento de {s.duration_s.toFixed(0)} s desde t = {s.t0.toFixed(0)} s tras filtrado, referencia promedio e ICA. Escala: {spacing} µV entre trazos (× ganancia).</p>
+    </div>
+  )
+}
+
+export function PsdChart({ s }: { s: SignalExcerpt }) {
+  const mean = s.psd_freqs.map((f, i) => ({ f, mean: s.psd.reduce((a, row) => a + row[i], 0) / s.psd.length }))
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <LineChart data={mean} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+        <CartesianGrid stroke={css('--line')} vertical={false} />
+        <XAxis dataKey="f" tickLine={false} axisLine={false} label={{ value: 'Hz', position: 'insideRight', offset: -4 }} />
+        <YAxis tickLine={false} axisLine={false} width={44} />
+        <Tooltip formatter={(v) => fmtVal(v, 2)} labelFormatter={(l) => `${Number(l).toFixed(1)} Hz`} />
+        <ReferenceArea x1={8} x2={12} fill={css('--ref')} fillOpacity={0.12} label={{ value: 'alfa', fontSize: 10 }} />
+        <Line type="monotone" dataKey="mean" name="log10 PSD media (µV²/Hz)" stroke={css('--primary')} dot={false} strokeWidth={2} />
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
+export function TrendChart({ items, tiers }: { items: AnalysisSummary[]; tiers: Tier[] }) {
+  const data = [...items].sort((a, b) => a.created_at.localeCompare(b.created_at)).map((a) => ({
+    date: new Date(a.created_at).toLocaleDateString(), p: 100 * (a.p_posterior ?? 0), id: a.analysis_id,
+  }))
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+        <CartesianGrid stroke={css('--line')} vertical={false} />
+        {tiers.map((t) => <ReferenceArea key={t.code} y1={100 * t.min} y2={100 * t.max} fill={tierVar(t.code)} fillOpacity={0.08} />)}
+        <XAxis dataKey="date" tickLine={false} axisLine={false} />
+        <YAxis domain={[0, 100]} tickLine={false} axisLine={false} width={40} unit=" %" />
+        <Tooltip formatter={(v) => `${fmtVal(v, 0)} %`} />
+        <Line type="monotone" dataKey="p" name="Probabilidad posterior" stroke={css('--primary')} strokeWidth={2} dot={{ r: 5 }} />
+      </LineChart>
+    </ResponsiveContainer>
   )
 }

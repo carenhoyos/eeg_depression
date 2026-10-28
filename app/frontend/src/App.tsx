@@ -1,12 +1,17 @@
-import { Link, Route, Routes, useNavigate } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from './api/client'
-import UploadForm from './components/UploadForm'
+import { useAuth } from './auth'
+import Login from './pages/Login'
+import Patients from './pages/Patients'
+import PatientDetail from './pages/PatientDetail'
+import NewAnalysis from './pages/NewAnalysis'
 import ReportPage from './components/ReportView'
 
 function Header() {
+  const { user, logout } = useAuth()
   const health = useQuery({ queryKey: ['health'], queryFn: api.health })
-  const model = useQuery({ queryKey: ['model'], queryFn: api.model })
+  const model = useQuery({ queryKey: ['model'], queryFn: api.model, enabled: !!user })
   const cv = model.data?.validation?.cv_per_repeat_mean
   return (
     <header className="header">
@@ -14,43 +19,42 @@ function Header() {
         <Link to="/" className="brand">{health.data?.app ?? 'EEG · apoyo al tamizaje'}</Link>
         <p className="muted small">
           {model.data
-            ? `Modelo ${model.data.model_name} v${model.data.version} · AUC en validación cruzada por sujeto ${cv?.auc?.toFixed(2) ?? '?'} · ${model.data.n_train.cases} casos / ${model.data.n_train.controls} controles`
-            : health.isError ? 'API no disponible' : 'Cargando modelo…'}
+            ? `Modelo ${model.data.model_name} v${model.data.version} · AUC por sujeto ${cv?.auc?.toFixed(2) ?? '?'} · ${model.data.n_train.cases} casos / ${model.data.n_train.controls} controles`
+            : health.isError ? 'API no disponible' : 'Apoyo a la decisión clínica, no diagnóstico'}
         </p>
       </div>
-      <nav><Link to="/">Nuevo análisis</Link><Link to="/history">Historial</Link></nav>
+      {user && (
+        <nav>
+          <Link to="/patients">Pacientes</Link>
+          <Link to="/analyses/new">Nuevo análisis</Link>
+          <span className="muted small">{user.full_name || user.username} · {user.role}</span>
+          <button className="link" onClick={logout}>Salir</button>
+        </nav>
+      )}
     </header>
   )
 }
 
-function History() {
-  const list = useQuery({ queryKey: ['analyses'], queryFn: api.list, refetchInterval: 5000 })
-  return (
-    <section className="card">
-      <h2>Análisis recientes</h2>
-      {list.data?.length ? (
-        <table><thead><tr><th>ID</th><th>Estado</th><th>Actualizado</th></tr></thead>
-          <tbody>{list.data.map((a) => (
-            <tr key={a.analysis_id}>
-              <td>{a.status === 'done' ? <Link to={`/analyses/${a.analysis_id}`}>{a.analysis_id}</Link> : a.analysis_id}</td>
-              <td>{a.status}</td><td>{a.updated_at ? new Date(a.updated_at).toLocaleString() : '-'}</td>
-            </tr>))}
-          </tbody></table>
-      ) : <p className="muted">Sin análisis todavía.</p>}
-    </section>
-  )
+function RequireAuth({ children }: { children: React.ReactElement }) {
+  const { user, loading } = useAuth()
+  const loc = useLocation()
+  if (loading) return <section className="card"><p>Cargando…</p></section>
+  if (!user) return <Navigate to="/login" state={{ from: loc.pathname }} replace />
+  return children
 }
 
 export default function App() {
-  const navigate = useNavigate()
   return (
     <div className="layout">
       <Header />
       <main>
         <Routes>
-          <Route path="/" element={<UploadForm onDone={(id) => navigate(`/analyses/${id}`)} />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/analyses/:id" element={<ReportPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Navigate to="/patients" replace />} />
+          <Route path="/patients" element={<RequireAuth><Patients /></RequireAuth>} />
+          <Route path="/patients/:id" element={<RequireAuth><PatientDetail /></RequireAuth>} />
+          <Route path="/analyses/new" element={<RequireAuth><NewAnalysis /></RequireAuth>} />
+          <Route path="/analyses/:id" element={<RequireAuth><ReportPage /></RequireAuth>} />
         </Routes>
       </main>
     </div>

@@ -1,0 +1,195 @@
+# =====================================================================
+# Configuración para OpenNeuro ds003478 "EEG: Depression rest" (Cavanagh et al., CC0).
+# Señal cruda BIDS (EEGLAB .set/.fdt). Todo parámetro vive aquí.
+# =====================================================================
+
+project:
+  name: eeg_depression_ds003478
+  seed: 42
+  output_dir: outputs_ds003478
+  n_jobs: -1
+
+data:
+  kind: raw
+  bids_root: ../data/ds003478          # fuera del repositorio (tamaño); relativo a la raíz del repo
+  task: Rest
+  runs: ["01"]                          # rest1: primera corrida, calidad verificada por el autor
+  participants_file: participants.tsv
+  subject_column: participant_id
+  label_column: BDI                     # etiqueta derivada de un puntaje continuo (ver labels)
+  time_column: null
+  epoch_column: null
+  positive_class: depressed_symptoms     # nombres de clase derivados
+  negative_class: control
+  drop_columns: []
+  column_patterns: {}                   # no aplica a señal cruda
+  covariates: [age, sex, STAI, SCID]    # se conservan en meta para auditoría de sesgos
+  # Criterios del estudio original (BDI alto vs bajo, zona intermedia excluida).
+  labels:
+    positive_min: 13                    # BDI >= 13 -> síntomas depresivos elevados
+    negative_max: 7                     # BDI <  7  -> control (umbral exclusivo: BDI <= 6)
+    negative_max_inclusive: false
+    exclude_subjects: ["sub-038"]       # INVALID PARTICIPANT en participants.tsv
+    exclude_original_ids: [544]         # BDI inestable entre evaluaciones (README)
+    exclude_scid: ["Past MDD"]          # controles no deben tener historia de MDD; casos sí pueden
+    exclude_scid_applies_to: negative   # negative | positive | both
+  condition:
+    use: eyes_closed                    # eyes_closed | eyes_open | both
+    event_column: trial_type
+    patterns: {eyes_closed: "^Eyes Closed", eyes_open: "^Eyes Open"}
+    block_gap_s: 5.0                    # separación entre marcadores que define un bloque nuevo
+    min_block_s: 20.0
+
+acquisition:
+  sampling_rate_hz: 500
+  reference: "Between Cz & CPz (Neuroscan)"
+  condition: eyes_closed
+  device: "Neuroscan Synamps2, 64 canales + HEOG/VEOG + M1/M2"
+  line_noise_hz: 60
+  site: "University of Arizona (John J.B. Allen lab), 2008-2010"
+  population: "Universitarios 18-25 años seleccionados por BDI alto o bajo"
+  epoch_length_s_source: null
+
+channels:
+  # Nombres tal como aparecen en los .set (mayúsculas). Subconjunto 10-20 de 19 canales.
+  list: [FP1, FP2, F7, F3, FZ, F4, F8, T7, C3, CZ, C4, T8, P7, P3, PZ, P4, P8, O1, O2]
+  rename: {FP1: Fp1, FP2: Fp2, FZ: Fz, CZ: Cz, PZ: Pz}
+  montage: standard_1020
+  eog: [HEOG, VEOG]                     # pueden estar mal etiquetados (README); se usan solo como proxy
+  mastoids: [M1, M2]
+  drop: [CB1, CB2]
+  regions:
+    frontal:   [Fp1, Fp2, F7, F3, Fz, F4, F8]
+    central:   [C3, Cz, C4]
+    temporal:  [T7, T8, P7, P8]
+    parietal:  [P3, Pz, P4]
+    occipital: [O1, O2]
+  asymmetry_pairs: [[Fp1, Fp2], [F7, F8], [F3, F4], [C3, C4], [T7, T8], [P3, P4], [P7, P8], [O1, O2]]
+
+bands:
+  delta:    [1, 4]
+  theta:    [4, 8]
+  alpha:    [8, 12]
+  beta:     [12, 25]
+  highbeta: [25, 30]
+  gamma:    [30, 40]
+
+preprocessing:
+  resample_hz: 250                      # >= 2.5 x f_max (40 Hz) para evitar aliasing; null = nativo
+  bandpass_hz: [1.0, 40.0]
+  notch_hz: [60.0]
+  rereference: average                  # average | linked_mastoids | none
+  rereference_on_full_montage: true     # promedio sobre los 64 canales antes de reducir a 19
+  ica:
+    enabled: true
+    method: picard
+    n_components: 20
+    eog_proxy_channels: [Fp1, Fp2]      # correlación con frontopolares; robusto a EOG mal etiquetado
+    muscle_score_threshold: 0.5
+    max_excluded: 5
+  epoch:
+    length_s: 4.0
+    overlap_fraction: 0.5
+  reject:
+    peak_to_peak_uv: 150.0
+    flat_uv: 1.0
+  min_epochs_per_subject: 10
+  cache_dir: outputs_ds003478/cache     # ICA es costoso: se cachea el Raw limpio por sujeto
+
+qc:
+  duplicate_policy: same_group
+  log_transform_power: true
+  robust_z_threshold: 5.0
+  max_flagged_fraction: 0.10
+  drop_rows_failing_qc: false
+  coherence_range: [0.0, 100.0]
+
+features:
+  absolute_power: {enabled: false, log10: true}
+  relative_power: {enabled: true}
+  regional_relative_power: {enabled: true}
+  asymmetry: {enabled: true, bands: [alpha]}
+  coherence:
+    enabled: true
+    mode: regional
+    bands: [delta, theta, alpha, beta, highbeta, gamma]
+    nperseg_s: 2.0
+  wpli: {enabled: false}
+  nonlinear: {enabled: false, measures: [sample_entropy, higuchi_fd, dfa]}
+
+validation:
+  holdout: {enabled: true, fraction: 0.20}
+  outer: {scheme: group_kfold, n_splits: 5, n_repeats: 5}
+  inner: {n_splits: 5}
+  scoring: roc_auc
+  threshold: {strategy: train_prevalence, value: 0.5}
+  scaler: standard
+  feature_selection: {method: kbest_f, k_grid: [20, 50, 100]}
+  calibration: {enabled: true, method: sigmoid, cv: 3}
+  bootstrap: {n: 2000, ci: 0.95}
+  permutation_test: {enabled: true, n_permutations: 100}
+  ece_bins: 10
+
+models:
+  svm_linear:
+    type: svm
+    params: {kernel: linear, class_weight: balanced, probability: true, max_iter: -1}
+    grid: {clf__C: [0.001, 0.01, 0.1, 1.0]}
+  svm_rbf:
+    type: svm
+    params: {kernel: rbf, class_weight: balanced, probability: true}
+    grid: {clf__C: [0.1, 1.0, 10.0], clf__gamma: [scale, 0.001, 0.01]}
+  random_forest:
+    type: random_forest
+    params: {n_estimators: 500, class_weight: balanced_subsample, min_samples_leaf: 3}
+    grid: {clf__max_features: [sqrt, 0.2], clf__max_depth: [null, 6]}
+  logistic_l2:
+    type: logistic
+    params: {penalty: l2, class_weight: balanced, max_iter: 5000, solver: liblinear}
+    grid: {clf__C: [0.01, 0.1, 1.0]}
+
+# CNN compacta EEGNet sobre épocas crudas (PyTorch). Validación por sujeto; predicción por sujeto = media de épocas.
+deep:
+  enabled: true
+  model: eegnet
+  resample_hz: 128                      # frecuencia de las épocas para la CNN (EEGNet se diseñó a 128 Hz)
+  epochs: 60
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  F1: 8
+  D: 2
+  F2: 16
+  kernel_length: 64
+  dropout: 0.5
+  early_stopping_patience: 10
+  validation_fraction: 0.15             # fracción de SUJETOS de entrenamiento para parada temprana
+  outer: {n_splits: 5, n_repeats: 1}
+  device: cpu
+
+report:
+  metrics: [auc, sensitivity, specificity, f1, balanced_accuracy, brier, ece]
+  ci_metrics: [auc, balanced_accuracy]
+  decimals: 3
+
+plotting:
+  sequential_cmap: Blues
+  diverging_cmap: RdBu_r
+  color_primary: "#2a6fdb"
+  color_negative: "#d1495b"
+  color_reference: "#9a9a9a"
+  dpi: 150
+  topomap_contours: 4
+
+interpretability:
+  univariate_metric: auc
+  permutation_importance_repeats: 30
+  top_k_features: 25
+  topomap_bands: [delta, theta, alpha, beta, highbeta, gamma]
+
+# Validación cruzada entre sitios: modelos entrenados aquí se prueban sobre otros conjuntos de características.
+external_validation:
+  korean_features_csv:
+    enabled: true
+    config: config/config.yaml           # pipeline del CSV coreano (misma estructura de 19 canales)
+    note: "Extractor, referencia y población distintos: prueba de transferencia, no de rendimiento."

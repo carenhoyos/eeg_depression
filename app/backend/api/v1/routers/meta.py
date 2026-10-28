@@ -24,4 +24,4 @@ def report_config(c: Container = Depends(get_container)):
     """Niveles, prevalencia por defecto y formatos: el cliente los lee de aquí, nunca los fija."""
     r, i = c.settings.report, c.settings.input
     return {"tiers": [t.model_dump() for t in r.tiers], "pretest_prevalence_default": r.pretest_prevalence_default,
-            "formats": i.formats, "max_upload_mb": c.settings.app.max_upload_mb}
+            "formats": i.formats, "max_upload_mb": c.settings.app.max_upload_mb, "conditions": i.conditions}

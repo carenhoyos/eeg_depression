@@ -36,11 +36,39 @@ class RawInput(BaseModel):
     default_sampling_rate_hz: Optional[float] = None
     min_duration_s: float
     coherence_nperseg_s: float
+    domain_shift_warning: str
 
 
 class InputSection(BaseModel):
     formats: dict[str, list[str]]
+    conditions: list[str]
     raw: RawInput
+
+
+class AuthSection(BaseModel):
+    enabled: bool
+    secret_key: str
+    algorithm: str
+    token_expire_minutes: int
+    pbkdf2_iterations: int
+    allowed_roles: list[str]
+    bootstrap_username: str
+    bootstrap_password: str
+    bootstrap_role: str
+    bootstrap_full_name: str = ""
+
+
+class DatabaseSection(BaseModel):
+    url: str
+
+
+class SignalViewerSection(BaseModel):
+    excerpt_start_s: float
+    excerpt_duration_s: float
+    excerpt_sfreq: float
+    psd_fmin: float
+    psd_fmax: float
+    trace_spacing_uv: float
 
 
 class TierSpec(BaseModel):
@@ -81,10 +109,16 @@ class ReportSection(BaseModel):
     disclaimer: str
     plotting: PlottingSection
     limitations: list[str] = Field(default_factory=list)
+    assessment_template: str
+    assessment_max_findings: int
+    assessment_no_findings_text: str
 
 
 class Settings(BaseModel):
     app: AppSection
+    auth: AuthSection
+    database: DatabaseSection
+    signal_viewer: SignalViewerSection
     model: ModelSection
     input: InputSection
     report: ReportSection

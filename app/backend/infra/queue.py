@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import threading
 import traceback
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 from .storage import Storage
 
 
+OnFinish = Callable[[str, Optional[dict[str, Any]], Optional[str]], None]
+
+
 class JobQueue(Protocol):
-    def enqueue(self, analysis_id: str, fn: Callable[[], dict[str, Any]]) -> None: ...
+    def enqueue(self, analysis_id: str, fn: Callable[[], dict[str, Any]], on_finish: Optional[OnFinish] = None) -> None: ...
 
 
 class InProcessQueue:
@@ -19,16 +22,22 @@ class InProcessQueue:
     def __init__(self, storage: Storage):
         self.storage = storage
 
-    def enqueue(self, analysis_id: str, fn: Callable[[], dict[str, Any]]) -> None:
+    def enqueue(self, analysis_id: str, fn: Callable[[], dict[str, Any]], on_finish: Optional[OnFinish] = None) -> None:
         def _run():
             try:
                 self.storage.write_status(analysis_id, "running")
+                if on_finish:
+                    on_finish("running", None, None)
                 report = fn()
                 self.storage.write_report(analysis_id, report)
                 self.storage.write_status(analysis_id, "done")
+                if on_finish:
+                    on_finish("done", report, None)
             except Exception as e:  # noqa: BLE001
                 (self.storage.dir(analysis_id) / "error.log").write_text(traceback.format_exc())
                 self.storage.write_status(analysis_id, "error", str(e))
+                if on_finish:
+                    on_finish("error", None, str(e))
 
         self.storage.write_status(analysis_id, "queued")
         threading.Thread(target=_run, daemon=True).start()

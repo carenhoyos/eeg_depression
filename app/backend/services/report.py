@@ -122,6 +122,24 @@ def fig_contributions(contrib: pd.Series, rep: ReportSection, out: Path) -> Path
     return out
 
 
+def fig_signal(signal: dict[str, Any], sv, rep: ReportSection, out: Path) -> Path:
+    """Trazos apilados del fragmento de señal limpia (uV) y PSD media por canal."""
+    data = np.asarray(signal["data"]); t = signal["t0"] + np.arange(data.shape[1]) / signal["sfreq"]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.2), gridspec_kw={"width_ratios": [2.2, 1]})
+    sp = float(sv.trace_spacing_uv)
+    for i, (ch, row) in enumerate(zip(signal["channels"], data)):
+        ax1.plot(t, row - i * sp, lw=0.6, color=rep.plotting.color_primary)
+    ax1.set_yticks([-i * sp for i in range(len(signal["channels"]))], signal["channels"], fontsize=7)
+    ax1.set_xlabel("Tiempo (s)"); ax1.set_title("Señal limpia (fragmento)", fontsize=10); _style(ax1)
+    psd = np.asarray(signal["psd"]); f = np.asarray(signal["psd_freqs"])
+    ax2.plot(f, psd.T, lw=0.6, color=rep.plotting.color_reference, alpha=0.5)
+    ax2.plot(f, psd.mean(axis=0), lw=1.8, color=rep.plotting.color_primary, label="Media de canales")
+    ax2.set_xlabel("Frecuencia (Hz)"); ax2.set_ylabel("log10 PSD (uV²/Hz)"); ax2.set_title("Espectro", fontsize=10)
+    ax2.legend(frameon=False, fontsize=8); _style(ax2)
+    fig.savefig(out, dpi=rep.figures_dpi, bbox_inches="tight"); plt.close(fig)
+    return out
+
+
 # ----------------------------------------------------------------- PDF
 class _PDF(FPDF):
     def __init__(self, title: str, page_size: str):
@@ -174,8 +192,9 @@ def build_pdf(report: dict[str, Any], figure_paths: dict[str, Path], rep: Report
         pdf.set_font("Helvetica", "B", 9); pdf.multi_cell(0, 5.5, f"Impresión: {t['text']}", new_x="LMARGIN", new_y="NEXT")
         if f"probability_{rid}" in figure_paths:
             pdf.image(str(figure_paths[f"probability_{rid}"]), w=150)
+        pdf.set_font("Helvetica", "", 9); pdf.multi_cell(0, 5, r.get("preliminary_assessment", ""), new_x="LMARGIN", new_y="NEXT")
         _section(pdf, "4. Descripción cuantitativa del EEG")
-        for name, w in (("band_power", 170), ("topomaps", 170), ("coherence", 100)):
+        for name, w in (("signal", 180), ("band_power", 170), ("topomaps", 170), ("coherence", 100)):
             if f"{name}_{rid}" in figure_paths:
                 pdf.image(str(figure_paths[f"{name}_{rid}"]), w=w)
         if r["findings"]:

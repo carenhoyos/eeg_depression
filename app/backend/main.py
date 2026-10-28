@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .api.v1.routers import analyses, meta
+from .api.v1.routers import analyses, auth, meta, patients
 from .core.config import Settings, get_settings
 from .core.dependencies import build_container
 
@@ -29,8 +29,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title=settings.app.name, version=settings.app.version, lifespan=lifespan,
                   docs_url=f"{settings.app.api_prefix}/docs", openapi_url=f"{settings.app.api_prefix}/openapi.json")
     app.add_middleware(CORSMiddleware, allow_origins=settings.app.cors_origins, allow_methods=["*"], allow_headers=["*"])
-    app.include_router(meta.router, prefix=settings.app.api_prefix)
-    app.include_router(analyses.router, prefix=settings.app.api_prefix)
+    for r in (meta.router, auth.router, patients.router, analyses.router):
+        app.include_router(r, prefix=settings.app.api_prefix)
     frontend = settings.resolve(settings.app.frontend_dir)
     if frontend.exists():
         app.mount("/assets", StaticFiles(directory=frontend / "assets"), name="assets")

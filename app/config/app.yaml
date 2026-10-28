@@ -13,6 +13,32 @@ app:
   api_prefix: /api/v1
   frontend_dir: app/frontend/dist   # build de Vite (npm run build)
 
+# Autenticación del rol psiquiatra. El usuario inicial se crea al arrancar desde estas claves
+# (en producción: EEGDEP_AUTH__SECRET_KEY, EEGDEP_AUTH__BOOTSTRAP_PASSWORD por variables de entorno).
+auth:
+  enabled: true
+  secret_key: "change-me-in-production"
+  algorithm: HS256
+  token_expire_minutes: 720
+  pbkdf2_iterations: 200000
+  allowed_roles: [psychiatrist, admin]
+  bootstrap_username: psiquiatra
+  bootstrap_password: "cambiar-esta-clave"
+  bootstrap_role: psychiatrist
+  bootstrap_full_name: "Usuario inicial"
+
+database:
+  url: sqlite:///app/storage/app.db     # relativa a la raíz; Postgres = postgresql+psycopg://user:pass@host/db
+
+# Visor de señal: fragmento de la señal limpia y espectro por canal que se devuelven en el informe.
+signal_viewer:
+  excerpt_start_s: 10.0
+  excerpt_duration_s: 10.0
+  excerpt_sfreq: 100.0
+  psd_fmin: 1.0
+  psd_fmax: 40.0
+  trace_spacing_uv: 60.0
+
 model:
   bundle_path: models/release/latest/bundle.pkl
   pipeline_config: config/config.yaml   # define canales, bandas, features, preprocesamiento
@@ -21,12 +47,17 @@ input:
   # Formatos aceptados y cómo se reconocen por extensión.
   formats:
     csv_features: [".csv"]       # misma estructura que el CSV de entrenamiento (features precalculadas)
-    edf: [".edf", ".bdf"]        # señal cruda
+    edf: [".edf", ".bdf"]        # señal cruda (European Data Format / BioSemi)
+    eeglab: [".set"]             # señal cruda EEGLAB; subir .set y .fdt juntos
+    fif: [".fif"]                # señal cruda MNE
     csv_raw: [".tsv", ".rawcsv"] # señal cruda en columnas (muestras x canales); requiere sampling_rate_hz
+  conditions: [eyes_closed, eyes_open]
   raw:
     default_sampling_rate_hz: null   # si el archivo no la trae, el usuario debe indicarla
     min_duration_s: 60
     coherence_nperseg_s: 2.0
+    domain_shift_warning: "Características calculadas desde señal cruda con el pipeline propio; verificar que la condición y la referencia coinciden con las del entrenamiento del modelo."
+
 
 report:
   language: es
@@ -52,6 +83,15 @@ report:
   pdf:
     page_size: A4
     title: "Informe de apoyo al tamizaje de depresión mayor a partir de EEG"
+  # Valoración preliminar: plantilla con marcadores {p_posterior} {p_calibrated} {pretest} {lr} {tier_name} {tier_text} {findings}
+  assessment_template: >
+    Valoración preliminar automática (apoyo, no diagnóstico): el patrón de EEG en reposo corresponde al nivel
+    "{tier_name}" con una probabilidad posterior de {p_posterior:.0f} % de síntomas depresivos clínicamente
+    relevantes, asumiendo una prevalencia pre-test de {pretest:.0f} % (razón de verosimilitud {lr:.2f}).
+    {tier_text} Hallazgos cuantitativos destacados: {findings}. Esta valoración debe integrarse con la entrevista
+    clínica, las escalas y la historia del paciente.
+  assessment_max_findings: 4
+  assessment_no_findings_text: "sin desviaciones relevantes respecto al grupo de referencia"
   disclaimer: >
     Este informe es generado por un modelo de apoyo a la decisión en fase de investigación.
     No constituye un diagnóstico ni sustituye la evaluación clínica. El modelo fue desarrollado con

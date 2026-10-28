@@ -19,3 +19,5 @@ models/release/*/bundle.pkl
 
 app/frontend/node_modules/
 app/frontend/dist/
+outputs_ds003478/
+outputs_ds003478_run.log

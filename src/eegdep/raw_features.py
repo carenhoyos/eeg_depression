@@ -22,9 +22,18 @@ from .preprocess import band_power_from_epochs, filter_raw, make_epochs, raw_fro
 def read_raw_file(path: Path, kind: str, cfg: dict[str, Any], sampling_rate_hz: float | None) -> mne.io.BaseRaw:
     """Carga EDF/BDF o CSV crudo y lo deja con los 19 canales del config renombrados al 10-20 moderno."""
     ch_cfg = cfg["channels"]
-    if kind == "edf":
-        raw = mne.io.read_raw_edf(path, preload=True, verbose=False) if path.suffix.lower() == ".edf" \
-            else mne.io.read_raw_bdf(path, preload=True, verbose=False)
+    if kind in ("edf", "eeglab", "fif"):
+        ext = path.suffix.lower()
+        if ext == ".edf":
+            raw = mne.io.read_raw_edf(path, preload=True, verbose=False)
+        elif ext == ".bdf":
+            raw = mne.io.read_raw_bdf(path, preload=True, verbose=False)
+        elif ext == ".set":
+            raw = mne.io.read_raw_eeglab(path, preload=True, verbose=False)
+        elif ext == ".fif":
+            raw = mne.io.read_raw_fif(path, preload=True, verbose=False)
+        else:
+            raise ValueError(f"Extensión no soportada: {ext}")
         # normaliza nombres: quita prefijos tipo "EEG Fp1-REF" y aplica rename del config
         mapping = {}
         wanted = {c.upper(): c for c in ch_cfg["list"]} | {ch_cfg["rename"].get(c, c).upper(): c for c in ch_cfg["list"]}
@@ -69,7 +78,7 @@ def coherence_from_epochs(epochs: mne.Epochs, bands: dict[str, list[float]], npe
 
 
 def raw_to_feature_set(raw: mne.io.BaseRaw, cfg: dict[str, Any], app_raw_cfg: dict[str, Any], seed: int,
-                       subject_id: str = "upload") -> tuple[EEGFeatureSet, dict[str, Any]]:
+                       subject_id: str = "upload", return_clean: bool = False):
     """Pipeline MNE completo (filtros, notch, referencia, ICA, épocas, rechazo) y extracción de características."""
     pre = cfg["preprocessing"]
     log: dict[str, Any] = {"sfreq": float(raw.info["sfreq"]), "duration_s": float(raw.times[-1])}
@@ -91,4 +100,6 @@ def raw_to_feature_set(raw: mne.io.BaseRaw, cfg: dict[str, Any], app_raw_cfg: di
         subjects=np.array([subject_id]), groups=np.array([0]), y=np.array([-1]), labels_raw=np.array(["unknown"]),
         bands=list(bands.keys()), channels=list(epochs.ch_names), power=power[None], coherence=coh[None],
     )
+    if return_clean:
+        return fs, log, raw
     return fs, log
