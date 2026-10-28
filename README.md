@@ -27,7 +27,15 @@ eeg_depression/
 │   └── run_all.sh              # ejecuta 01..05
 ├── outputs/                    # artefactos numerados por etapa (json/csv/pkl/figures)
 ├── reports/TRIPOD_AI_template.md
-└── requirements.txt
+├── models/release/<versión>/   # bundle versionado del modelo (06_export_bundle.py); `latest` apunta a la versión activa
+├── app/
+│   ├── config/app.yaml         # configuración de la aplicación (niveles, prevalencia, formatos, textos, estilo)
+│   ├── backend/                # FastAPI en capas: core (config, DI) · domain (contratos, caso de uso) · services (informe) · infra (storage, cola) · api/v1
+│   └── frontend/               # React + TypeScript + Vite + TanStack Query + Recharts (build en dist/)
+├── tests/test_api.py           # pruebas de integración de la API
+├── docs/ARCHITECTURE.md        # arquitectura, flujo, estándar del informe, plan Flutter y regulación
+├── Dockerfile · docker-compose.yml
+└── requirements.txt · requirements-app.txt
 ```
 
 ## Uso
@@ -44,6 +52,25 @@ python scripts/05_interpret.py
 
 Para experimentar, copia el YAML (p. ej. `config/exp_coh_all.yaml`) y cambia solo lo necesario
 (`features.coherence.mode: all`, `validation.outer.scheme: loso`, etc.).
+
+## Aplicación web (API + cliente React)
+
+```bash
+pip install -r requirements-app.txt
+python scripts/06_export_bundle.py                      # publica models/release/<versión>/bundle.pkl
+(cd app/frontend && cp .env.example .env && npm install && npm run build)
+python -m uvicorn app.backend.main:app --port 8000      # http://localhost:8000 · API docs en /api/v1/docs
+python -m pytest -q tests                               # pruebas de integración
+```
+
+Desarrollo del frontend con recarga en caliente: `cd app/frontend && npm run dev` (reenvía la API al backend
+definido en `VITE_DEV_BACKEND`). Con Docker: `docker compose up --build`.
+
+Entradas aceptadas (configurables en `app/config/app.yaml`): CSV de características con la estructura de
+entrenamiento (`data/examples/sample_features.csv`), EDF/BDF o CSV de señal cruda (requiere frecuencia de muestreo).
+El informe (JSON, figuras y PDF) incluye probabilidad calibrada, razón de verosimilitud, probabilidad posterior a la
+prevalencia pre-test indicada, nivel de clasificación, desviaciones frente al grupo de referencia, contribuciones del
+modelo y la ficha de validación. Ver `docs/ARCHITECTURE.md`.
 
 ## Garantías de validación
 
